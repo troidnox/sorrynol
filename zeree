@@ -6256,7 +6256,6 @@ function MacLib:Window(Settings)
 		return windowState
 	end
 
-	local onUnloadCallback
 
 	function WindowFunctions:Unload()
 		-- Obsidian pattern: disconnect every tracked signal in reverse, then fire callbacks
