@@ -691,6 +691,8 @@ function MacLib:Window(Settings)
 		for _, entry in ipairs(MacLib._accentElements) do
 			pcall(function()
 				if entry.inst and entry.inst.Parent then
+					-- skip elements bound to a different scheme property (e.g. BackgroundColor)
+					if entry.schemeProp and entry.schemeProp ~= "AccentColor" then return end
 					if entry.prop then
 						local c = entry.getColor and entry.getColor() or color
 						TweenService:Create(entry.inst, info, { [entry.prop] = c }):Play()
@@ -2373,7 +2375,7 @@ function MacLib:Window(Settings)
 				sectionCard.Parent = sectionOuter
 
 				local sectionCorner = Instance.new("UICorner")
-				sectionCorner.CornerRadius = UDim.new(0, 8)
+				sectionCorner.CornerRadius = UDim.new(0, 12)
 				sectionCorner.Parent = sectionCard
 
 				local sectionStroke = Instance.new("UIStroke")
@@ -2393,15 +2395,12 @@ function MacLib:Window(Settings)
 							iconImg.Image = _icon.Url
 							iconImg.ImageRectOffset = _icon.ImageRectOffset
 							iconImg.ImageRectSize = _icon.ImageRectSize
-							iconImg.ImageColor3 = MacLib.Accent or Color3.fromRGB(138, 79, 255)
+							iconImg.ImageColor3 = Color3.fromRGB(255, 255, 255)
 							iconImg.BackgroundTransparency = 1
 							iconImg.BorderSizePixel = 0
 							iconImg.Position = UDim2.fromOffset(6, 6)
 							iconImg.Size = UDim2.fromOffset(22, 22)
 							iconImg.Parent = sectionCard
-							if MacLib._accentElements then
-								table.insert(MacLib._accentElements, { inst = iconImg, prop = "ImageColor3" })
-							end
 						end
 					end
 
@@ -2603,14 +2602,6 @@ function MacLib:Window(Settings)
 					toggle1.Image = assets.toggleBackground
 					toggle1.ImageColor3 = Color3.fromRGB(87, 86, 86)
 
-					-- register for accent updates — getColor checks live state
-					table.insert(MacLib._accentElements, {
-						inst = toggle1,
-						prop = "ImageColor3",
-						getColor = function()
-							return togglebool and MacLib.Accent or Color3.fromRGB(87, 86, 86)
-						end
-					})
 					toggle1.AutoButtonColor = false
 					toggle1.AnchorPoint = Vector2.new(1, 0.5)
 					toggle1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
