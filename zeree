@@ -281,6 +281,11 @@ local _loadingMusic = {
 	"rbxassetid://4913670308",
 }
 
+-- Tween helper needed by CreateLoading (defined here so it's in scope)
+local function _tw(instance, tweeninfo, props)
+	return game:GetService("TweenService"):Create(instance, tweeninfo, props)
+end
+
 function MacLib:CreateLoading(info)
 	if _activeLoading then return _activeLoading end
 
@@ -517,9 +522,9 @@ function MacLib:CreateLoading(info)
 
 	-- Fade in: overlay dims, card slides in
 	local tw = TweenInfo.new(0.35, Enum.EasingStyle.Sine)
-	Tween(overlay, tw, { BackgroundTransparency = 0.55 }):Play()
+	_tw(overlay, tw, { BackgroundTransparency = 0.55 }):Play()
 	card.BackgroundTransparency = 1
-	Tween(card, tw, { BackgroundTransparency = 0 }):Play()
+	_tw(card, tw, { BackgroundTransparency = 0 }):Play()
 
 	local Loading = {}
 	Loading.ScreenGui = sg
@@ -529,7 +534,7 @@ function MacLib:CreateLoading(info)
 
 	function Loading:SetStep(current, total, label)
 		local pct = (total and total > 0) and (current / total) or 0
-		Tween(barFill, TweenInfo.new(0.2, Enum.EasingStyle.Sine), { Size = UDim2.fromScale(math.clamp(pct, 0, 1), 1) }):Play()
+		_tw(barFill, TweenInfo.new(0.2, Enum.EasingStyle.Sine), { Size = UDim2.fromScale(math.clamp(pct, 0, 1), 1) }):Play()
 		if label then stepLbl.Text = label end
 	end
 
@@ -548,8 +553,8 @@ function MacLib:CreateLoading(info)
 				end)
 			end
 			local out = TweenInfo.new(0.3, Enum.EasingStyle.Sine)
-			Tween(overlay, out, { BackgroundTransparency = 1 }):Play()
-			Tween(card, out, { BackgroundTransparency = 1 }):Play()
+			_tw(overlay, out, { BackgroundTransparency = 1 }):Play()
+			_tw(card, out, { BackgroundTransparency = 1 }):Play()
 			task.delay(0.35, function()
 				sg:Destroy()
 				_activeLoading = nil
@@ -2178,7 +2183,7 @@ function MacLib:Window(Settings)
 			tabSwitcher.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			tabSwitcher.BorderSizePixel = 0
 			tabSwitcher.Position = UDim2.fromScale(0.5, 0)
-			tabSwitcher.Size = UDim2.new(1, -21, 0, 40)
+			tabSwitcher.Size = UDim2.new(1, -21, 0, 34)
 
 			tabIndex += 1
 			tabSwitcher.LayoutOrder = tabIndex
@@ -2217,7 +2222,7 @@ function MacLib:Window(Settings)
 					tabImage.BackgroundTransparency = 1
 					tabImage.BorderColor3 = Color3.fromRGB(0, 0, 0)
 					tabImage.BorderSizePixel = 0
-					tabImage.Size = UDim2.fromOffset(18, 18)
+					tabImage.Size = UDim2.fromOffset(16, 16)
 					tabImage.Parent = tabSwitcher
 				end
 			end
@@ -2232,7 +2237,7 @@ function MacLib:Window(Settings)
 			tabSwitcherName.Text = Settings.Name
 			tabSwitcherName.RichText = true
 			tabSwitcherName.TextColor3 = Color3.fromRGB(255, 255, 255)
-			tabSwitcherName.TextSize = 16
+			tabSwitcherName.TextSize = 13
 			tabSwitcherName.TextTransparency = 0.5
 			tabSwitcherName.TextTruncate = Enum.TextTruncate.SplitWord
 			tabSwitcherName.TextXAlignment = Enum.TextXAlignment.Left
@@ -2398,8 +2403,8 @@ function MacLib:Window(Settings)
 							iconImg.ImageColor3 = MacLib.Accent or Color3.fromRGB(138, 79, 255)
 							iconImg.BackgroundTransparency = 1
 							iconImg.BorderSizePixel = 0
-							iconImg.Position = UDim2.fromOffset(14, 9)
-							iconImg.Size = UDim2.fromOffset(18, 18)
+							iconImg.Position = UDim2.fromOffset(12, 9)
+							iconImg.Size = UDim2.fromOffset(22, 22)
 							iconImg.Parent = sectionCard
 							if MacLib._accentElements then
 								table.insert(MacLib._accentElements, {
@@ -2415,10 +2420,10 @@ function MacLib:Window(Settings)
 					local titleLbl = Instance.new("TextLabel")
 					titleLbl.BackgroundTransparency = 1
 					titleLbl.BorderSizePixel = 0
-					titleLbl.Position = UDim2.fromOffset(Settings.Image and 34 or 0, 0)
+					titleLbl.Position = UDim2.fromOffset(Settings.Image and 38 or 0, 0)
 					titleLbl.Size = UDim2.new(1, 0, 0, 40)
 					titleLbl.Text = Settings.Name or ""
-					titleLbl.TextSize = 14
+					titleLbl.TextSize = 16
 					titleLbl.FontFace = Font.new(assets.interFont, Enum.FontWeight.Medium)
 					titleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 					titleLbl.TextXAlignment = Enum.TextXAlignment.Left
