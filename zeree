@@ -2387,7 +2387,7 @@ function MacLib:Window(Settings)
 				local hasHeader = Settings.Name or Settings.Image
 
 				if hasHeader then
-					-- Obsidian: optional icon at (6,6) 22x22 in AccentColor
+					-- icon: pulled in from corners so curve is visible
 					if Settings.Image then
 						local _icon = resolveIcon(Settings.Image)
 						if _icon then
@@ -2398,8 +2398,8 @@ function MacLib:Window(Settings)
 							iconImg.ImageColor3 = MacLib.Accent or Color3.fromRGB(138, 79, 255)
 							iconImg.BackgroundTransparency = 1
 							iconImg.BorderSizePixel = 0
-							iconImg.Position = UDim2.fromOffset(6, 6)
-							iconImg.Size = UDim2.fromOffset(22, 22)
+							iconImg.Position = UDim2.fromOffset(14, 9)
+							iconImg.Size = UDim2.fromOffset(18, 18)
 							iconImg.Parent = sectionCard
 							if MacLib._accentElements then
 								table.insert(MacLib._accentElements, {
@@ -2411,41 +2411,41 @@ function MacLib:Window(Settings)
 						end
 					end
 
-					-- Obsidian: GroupboxLabel — 34px tall, TextSize 15, PaddingLeft 12
+					-- title: taller header (40px), left-padded to clear the corner curve
 					local titleLbl = Instance.new("TextLabel")
 					titleLbl.BackgroundTransparency = 1
 					titleLbl.BorderSizePixel = 0
-					titleLbl.Position = UDim2.fromOffset(Settings.Image and 24 or 0, 0)
-					titleLbl.Size = UDim2.new(1, 0, 0, 34)
+					titleLbl.Position = UDim2.fromOffset(Settings.Image and 34 or 0, 0)
+					titleLbl.Size = UDim2.new(1, 0, 0, 40)
 					titleLbl.Text = Settings.Name or ""
-					titleLbl.TextSize = 15
+					titleLbl.TextSize = 14
 					titleLbl.FontFace = Font.new(assets.interFont, Enum.FontWeight.Medium)
 					titleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 					titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 					titleLbl.RichText = true
 
 					local titlePad = Instance.new("UIPadding")
-					titlePad.PaddingLeft = UDim.new(0, 12)
-					titlePad.PaddingRight = UDim.new(0, 12)
+					titlePad.PaddingLeft = UDim.new(0, 14)
+					titlePad.PaddingRight = UDim.new(0, 14)
 					titlePad.Parent = titleLbl
 
 					titleLbl.Parent = sectionCard
 
-					-- Obsidian: LibraryMakeLine at Position Y=34, Size (1,0,0,1)
+					-- divider below header
 					local divLine = Instance.new("Frame")
 					divLine.BackgroundColor3 = MacLib.Scheme.OutlineColor
 					divLine.BorderSizePixel = 0
-					divLine.Position = UDim2.fromOffset(0, 34)
+					divLine.Position = UDim2.fromOffset(0, 40)
 					divLine.Size = UDim2.new(1, 0, 0, 1)
 					divLine.Parent = sectionCard
 				end
 
-				-- Obsidian: GroupboxContainer — at Y=35, UIListLayout pad 8, UIPadding 7 all
+				-- content container — more padding so items clear the corner curves
 				local section = Instance.new("Frame")
 				section.BackgroundTransparency = 1
 				section.AutomaticSize = Enum.AutomaticSize.Y
 				section.BorderSizePixel = 0
-				section.Position = UDim2.fromOffset(0, hasHeader and 35 or 0)
+				section.Position = UDim2.fromOffset(0, hasHeader and 41 or 0)
 				section.Size = UDim2.fromScale(1, 0)
 				section.Parent = sectionCard
 
@@ -2457,10 +2457,10 @@ function MacLib:Window(Settings)
 
 				local sectionUIPadding = Instance.new("UIPadding")
 				sectionUIPadding.Name = "SectionUIPadding"
-				sectionUIPadding.PaddingBottom = UDim.new(0, 7)
-				sectionUIPadding.PaddingLeft = UDim.new(0, 7)
-				sectionUIPadding.PaddingRight = UDim.new(0, 7)
-				sectionUIPadding.PaddingTop = UDim.new(0, 7)
+				sectionUIPadding.PaddingBottom = UDim.new(0, 12)
+				sectionUIPadding.PaddingLeft = UDim.new(0, 12)
+				sectionUIPadding.PaddingRight = UDim.new(0, 12)
+				sectionUIPadding.PaddingTop = UDim.new(0, 10)
 				sectionUIPadding.Parent = section
 
 
