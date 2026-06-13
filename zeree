@@ -2081,17 +2081,21 @@ function MacLib:Window(Settings)
 				tweens.checkOut:Play()
 				tweens.nameOut:Play()
 				checkmark:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-					if checkmark.AbsoluteSize.X <= 0 then
-						checkmark.TextTransparency = 1
-					end
+					pcall(function()
+						if checkmark.AbsoluteSize.X <= 0 then
+							checkmark.TextTransparency = 1
+						end
+					end)
 				end)
 			else
 				tweens.checkIn:Play()
 				tweens.nameIn:Play()
 				checkmark:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-					if checkmark.AbsoluteSize.X > 0 then
-						checkmark.TextTransparency = 0
-					end
+					pcall(function()
+						if checkmark.AbsoluteSize.X > 0 then
+							checkmark.TextTransparency = 0
+						end
+					end)
 				end)
 			end
 		end
@@ -3075,7 +3079,7 @@ function MacLib:Window(Settings)
 						local totalWidth = sliderElements.AbsoluteSize.X
 
 						local newBarWidth = (totalWidth - (padding + sliderValueWidth + sliderNameWidth + 20)) / baseUIScale.Scale
-						sliderBar.Size = UDim2.new(sliderBar.Size.X.Scale, newBarWidth, sliderBar.Size.Y.Scale, sliderBar.Size.Y.Offset)
+						pcall(function() sliderBar.Size = UDim2.new(sliderBar.Size.X.Scale, newBarWidth, sliderBar.Size.Y.Scale, sliderBar.Size.Y.Offset) end)
 					end
 
 					updateSliderBarSize()
@@ -3220,9 +3224,8 @@ function MacLib:Window(Settings)
 					local function checkSize()
 						local nameWidth = InputName.AbsoluteSize.X
 						local totalWidth = Input.AbsoluteSize.X
-
 						local maxWidth = (totalWidth - nameWidth - 20) / baseUIScale.Scale
-						Constraint.MaxSize = Vector2.new(maxWidth, 9e9)
+						pcall(function() Constraint.MaxSize = Vector2.new(maxWidth, 9e9) end)
 					end
 
 					checkSize()
