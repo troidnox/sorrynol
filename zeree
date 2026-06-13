@@ -2280,7 +2280,7 @@ function MacLib:Window(Settings)
 			local contentRowLayout = Instance.new("UIListLayout")
 			contentRowLayout.FillDirection = Enum.FillDirection.Horizontal
 			contentRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-			contentRowLayout.Padding = UDim.new(0, 0)
+			contentRowLayout.Padding = UDim.new(0, 10)
 			contentRowLayout.Parent = contentRow
 
 			local contentRowPad = Instance.new("UIPadding")
@@ -2300,7 +2300,7 @@ function MacLib:Window(Settings)
 			leftScroll.TopImage = ""
 			leftScroll.BackgroundTransparency = 1
 			leftScroll.BorderSizePixel = 0
-			leftScroll.Size = UDim2.new(0.5, -8, 1, 0)
+			leftScroll.Size = UDim2.new(0.5, -13, 1, 0)
 			leftScroll.ClipsDescendants = true
 			leftScroll.Parent = contentRow
 
@@ -2330,7 +2330,7 @@ function MacLib:Window(Settings)
 			rightScroll.BackgroundTransparency = 1
 			rightScroll.BorderSizePixel = 0
 			rightScroll.LayoutOrder = 1
-			rightScroll.Size = UDim2.new(0.5, -8, 1, 0)
+			rightScroll.Size = UDim2.new(0.5, -13, 1, 0)
 			rightScroll.ClipsDescendants = true
 			rightScroll.Parent = contentRow
 
@@ -2373,7 +2373,7 @@ function MacLib:Window(Settings)
 				sectionCard.Parent = sectionOuter
 
 				local sectionCorner = Instance.new("UICorner")
-				sectionCorner.CornerRadius = UDim.new(0, 4)
+				sectionCorner.CornerRadius = UDim.new(0, 8)
 				sectionCorner.Parent = sectionCard
 
 				local sectionStroke = Instance.new("UIStroke")
