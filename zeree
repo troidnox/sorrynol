@@ -2636,6 +2636,17 @@ function MacLib:Window(Settings)
 
 					local togglebool = ToggleFunctions.Settings.Default
 
+					-- register toggle1 so accent changes update enabled toggles live
+					if MacLib._accentElements then
+						table.insert(MacLib._accentElements, {
+							inst = toggle1,
+							prop = "ImageColor3",
+							getColor = function()
+								return togglebool and MacLib.Accent or Color3.fromRGB(87, 86, 86)
+							end
+						})
+					end
+
 					local function NewState(State, callback)
 						local transparencyValues = State and {toggle1Transparency.Enabled, togglerHeadTransparency.Enabled}
 							or {toggle1Transparency.Disabled, togglerHeadTransparency.Disabled}
@@ -2729,16 +2740,25 @@ function MacLib:Window(Settings)
 
 						updatePicker()
 
+						-- expose bound key so ClassParser can save/load it
+						ToggleFunctions.Bind = boundKey
+
 						picker.MouseButton1Click:Connect(function()
 							picking = not picking
 							updatePicker()
 						end)
 
 						UserInputService.InputBegan:Connect(function(inp, gpe)
-							if gpe then return end
+							if gpe or UserInputService:GetFocusedTextBox() then return end
 							if picking then
 								if inp.UserInputType == Enum.UserInputType.Keyboard then
-									boundKey = inp.KeyCode
+									if inp.KeyCode == Enum.KeyCode.Escape then
+										-- Escape clears the binding
+										boundKey = Enum.KeyCode.Unknown
+									else
+										boundKey = inp.KeyCode
+									end
+									ToggleFunctions.Bind = boundKey
 									picking = false
 									updatePicker()
 									if ToggleFunctions.Settings.onBinded then
@@ -2753,6 +2773,13 @@ function MacLib:Window(Settings)
 						end)
 
 						toggleName.Size = UDim2.new(1, -80, 0, 0)
+
+						-- exposed so ClassParser can restore the bind from config
+						function ToggleFunctions:SetBind(key)
+							boundKey = key or Enum.KeyCode.Unknown
+							ToggleFunctions.Bind = boundKey
+							updatePicker()
+						end
 					end
 					-- ────────────────────────────────────────────────────────────
 
@@ -6384,15 +6411,26 @@ function MacLib:Window(Settings)
 	local ClassParser = {
 		["Toggle"] = {
 			Save = function(Flag, data)
+				local bindName = nil
+				if typeof(data.Bind) == "EnumItem" and data.Bind ~= Enum.KeyCode.Unknown then
+					bindName = data.Bind.Name
+				end
 				return {
-					type = "Toggle", 
-					flag = Flag, 
-					state = data.State or false
+					type = "Toggle",
+					flag = Flag,
+					state = data.State or false,
+					bind = bindName
 				}
 			end,
 			Load = function(Flag, data)
-				if MacLib.Options[Flag] and data.state then
-					MacLib.Options[Flag]:UpdateState(data.state)
+				local opt = MacLib.Options[Flag]
+				if not opt then return end
+				if data.state then opt:UpdateState(data.state) end
+				if data.bind then
+					local ok, kc = pcall(function() return Enum.KeyCode[data.bind] end)
+					if ok and kc and opt.SetBind then
+						opt:SetBind(kc)
+					end
 				end
 			end
 		},
