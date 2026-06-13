@@ -3204,14 +3204,7 @@ function MacLib:Window(Settings)
 
 					InputBox.AutomaticSize = Enum.AutomaticSize.X
 
-					local function checkSize()
-						local nameWidth = InputName.AbsoluteSize.X
-						local totalWidth = Input.AbsoluteSize.X
-						local maxWidth = (totalWidth - nameWidth - 20) / baseUIScale.Scale
-						pcall(function() Constraint.MaxSize = Vector2.new(maxWidth, 9e9) end)
-					end
-
-					checkSize()
+					-- checkSize removed: Constraint.MaxSize write fails with lacking capability Plugin
 
 					InputBox.FocusLost:Connect(function()
 						local inputText = InputBox.Text
