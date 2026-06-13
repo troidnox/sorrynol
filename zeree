@@ -2080,23 +2080,9 @@ function MacLib:Window(Settings)
 			if not State then
 				tweens.checkOut:Play()
 				tweens.nameOut:Play()
-				checkmark:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-					pcall(function()
-						if checkmark.AbsoluteSize.X <= 0 then
-							checkmark.TextTransparency = 1
-						end
-					end)
-				end)
 			else
 				tweens.checkIn:Play()
 				tweens.nameIn:Play()
-				checkmark:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-					pcall(function()
-						if checkmark.AbsoluteSize.X > 0 then
-							checkmark.TextTransparency = 0
-						end
-					end)
-				end)
 			end
 		end
 
@@ -3084,9 +3070,6 @@ function MacLib:Window(Settings)
 
 					updateSliderBarSize()
 
-					sliderName:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSliderBarSize)
-					section:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSliderBarSize)
-
 					function SliderFunctions:UpdateName(Name)
 						sliderName = Name
 					end
@@ -3229,7 +3212,6 @@ function MacLib:Window(Settings)
 					end
 
 					checkSize()
-					InputName:GetPropertyChangedSignal("AbsoluteSize"):Connect(checkSize)
 
 					InputBox.FocusLost:Connect(function()
 						local inputText = InputBox.Text
