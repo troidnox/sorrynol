@@ -841,6 +841,11 @@ function MacLib:Window(Settings)
 	base.Position = UDim2.fromScale(0.5, 0.5)
 	base.Size = Settings.Size or UDim2.fromOffset(868, 650)
 
+	-- register base so SetScheme("BackgroundColor") live-updates the window
+	if MacLib._accentElements then
+		table.insert(MacLib._accentElements, { inst = base, prop = "BackgroundColor3", schemeProp = "BackgroundColor" })
+	end
+
 	local baseUIScale = Instance.new("UIScale")
 	baseUIScale.Name = "BaseUIScale"
 	baseUIScale.Scale = MacLib._dpi
@@ -2313,7 +2318,8 @@ function MacLib:Window(Settings)
 				-- Obsidian: styled card (GroupboxHolder equivalent)
 				local sectionCard = Instance.new("Frame")
 				sectionCard.Name = "Section"
-				sectionCard.BackgroundColor3 = MacLib.Scheme.BackgroundColor
+				sectionCard.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				sectionCard.BackgroundTransparency = 0.98
 				sectionCard.AutomaticSize = Enum.AutomaticSize.Y
 				sectionCard.Size = UDim2.fromScale(1, 0)
 				sectionCard.BorderSizePixel = 0
@@ -2323,20 +2329,11 @@ function MacLib:Window(Settings)
 				sectionCorner.CornerRadius = UDim.new(0, 4)
 				sectionCorner.Parent = sectionCard
 
-				-- Obsidian LibraryAddOutline: outer stroke (OutlineColor) + shadow stroke (black)
 				local sectionStroke = Instance.new("UIStroke")
-				sectionStroke.Color = MacLib.Scheme.OutlineColor
-				sectionStroke.Thickness = 1
-				sectionStroke.ZIndex = 2
+				sectionStroke.Color = Color3.fromRGB(255, 255, 255)
+				sectionStroke.Transparency = 0.95
 				sectionStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 				sectionStroke.Parent = sectionCard
-
-				local sectionShadow = Instance.new("UIStroke")
-				sectionShadow.Color = Color3.fromRGB(0, 0, 0)
-				sectionShadow.Thickness = 1.5
-				sectionShadow.ZIndex = 1
-				sectionShadow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-				sectionShadow.Parent = sectionCard
 
 				local hasHeader = Settings.Name or Settings.Image
 
