@@ -3065,7 +3065,7 @@ function MacLib:Window(Settings)
 						slider.Visible = State
 					end
 					function SliderFunctions:UpdateValue(Value)
-						SetValue(tonumber(Value), true)
+						SetValue(tonumber(Value), false)
 					end
 					function SliderFunctions:GetValue()
 						return finalValue
@@ -6471,15 +6471,19 @@ function MacLib:Window(Settings)
 		},
 		["Keybind"] = {
 			Save = function(Flag, data)
+				local current = data:GetBind()
 				return {
-					type = "Keybind", 
-					flag = Flag, 
-					bind = (typeof(data.Bind) == "EnumItem" and data.Bind.Name) or nil
+					type = "Keybind",
+					flag = Flag,
+					bind = (typeof(current) == "EnumItem" and current ~= Enum.KeyCode.Unknown and current.Name) or nil
 				}
 			end,
 			Load = function(Flag, data)
 				if MacLib.Options[Flag] and data.bind then
-					MacLib.Options[Flag]:Bind(Enum.KeyCode[data.bind])
+					local ok, kc = pcall(function() return Enum.KeyCode[data.bind] end)
+					if ok and kc then
+						MacLib.Options[Flag]:Bind(kc)
+					end
 				end
 			end
 		},
