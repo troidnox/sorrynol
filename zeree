@@ -1527,27 +1527,52 @@ function MacLib:Window(Settings)
 		end
 	end))
 
-	local currentTab = Instance.new("TextLabel")
-	currentTab.Name = "CurrentTab"
-	currentTab.FontFace = Font.new(assets.interFont)
-	currentTab.RichText = true
-	currentTab.Text = ""
-	currentTab.RichText = true
-	currentTab.TextColor3 = Color3.fromRGB(255, 255, 255)
-	currentTab.TextSize = 15
-	currentTab.TextTransparency = 0.5
-	currentTab.TextTruncate = Enum.TextTruncate.SplitWord
-	currentTab.TextXAlignment = Enum.TextXAlignment.Left
-	currentTab.TextYAlignment = Enum.TextYAlignment.Top
-	currentTab.AnchorPoint = Vector2.new(0, 0.5)
-	currentTab.AutomaticSize = Enum.AutomaticSize.Y
-	currentTab.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	currentTab.BackgroundTransparency = 1
-	currentTab.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	currentTab.BorderSizePixel = 0
-	currentTab.Position = UDim2.fromScale(0, 0.5)
-	currentTab.Size = UDim2.fromScale(0.9, 0)
-	currentTab.Parent = elements
+	-- Obsidian-style search bar replacing the static tab label
+	local searchBar = Instance.new("TextBox")
+	searchBar.Name = "SearchBar"
+	searchBar.ClearTextOnFocus = false
+	searchBar.FontFace = Font.new(assets.interFont)
+	searchBar.PlaceholderText = "Search..."
+	searchBar.PlaceholderColor3 = Color3.fromRGB(255, 255, 255)
+	searchBar.Text = ""
+	searchBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+	searchBar.TextSize = 14
+	searchBar.TextTransparency = 0.3
+	searchBar.TextXAlignment = Enum.TextXAlignment.Left
+	searchBar.AnchorPoint = Vector2.new(0, 0.5)
+	searchBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	searchBar.BackgroundTransparency = 0.96
+	searchBar.BorderSizePixel = 0
+	searchBar.Position = UDim2.fromScale(0, 0.5)
+	searchBar.Size = UDim2.new(1, -42, 0, 28)
+
+	local searchBarCorner = Instance.new("UICorner")
+	searchBarCorner.CornerRadius = UDim.new(0, 6)
+	searchBarCorner.Parent = searchBar
+
+	local searchBarStroke = Instance.new("UIStroke")
+	searchBarStroke.Color = Color3.fromRGB(255, 255, 255)
+	searchBarStroke.Transparency = 0.88
+	searchBarStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	searchBarStroke.Parent = searchBar
+
+	local searchBarPad = Instance.new("UIPadding")
+	searchBarPad.PaddingLeft = UDim.new(0, 10)
+	searchBarPad.PaddingRight = UDim.new(0, 10)
+	searchBarPad.Parent = searchBar
+
+	searchBar.Parent = elements
+
+	-- wire to the existing search system
+	searchBar:GetPropertyChangedSignal("Text"):Connect(function()
+		_runSearch(searchBar.Text)
+	end)
+	-- clear search on focus lost if empty
+	searchBar.FocusLost:Connect(function()
+		if searchBar.Text == "" then
+			_runSearch("")
+		end
+	end)
 
 	elements.Parent = topbar
 
@@ -5613,7 +5638,6 @@ function MacLib:Window(Settings)
 
 				tabs[tabSwitcher].tabContent.Parent = content
 				currentTabInstance = tabs[tabSwitcher].tabContent
-				currentTab.Text = Settings.Name
 			end
 
 			tabSwitcher.MouseButton1Click:Connect(function()
