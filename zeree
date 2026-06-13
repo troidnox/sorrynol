@@ -5262,40 +5262,30 @@ function MacLib:Window(Settings)
 					end)
 
 					local function makeCanvas()
-						local ColorPickerCanvas = Instance.new("CanvasGroup")
+						local ColorPickerCanvas = Instance.new("Frame")
 						ColorPickerCanvas.Name = "ColorPickerCanvas"
 						ColorPickerCanvas.BackgroundTransparency = 1
 						ColorPickerCanvas.BorderSizePixel = 0
 						ColorPickerCanvas.Size = UDim2.fromScale(1, 1)
 						ColorPickerCanvas.ZIndex = 5
-						ColorPickerCanvas.GroupTransparency = 1
-						ColorPickerCanvas.Parent = base
 						ColorPickerCanvas.Visible = false
+						ColorPickerCanvas.Parent = base
 						return ColorPickerCanvas
 					end
 
 					local function transition(isIn)
 						local canvas = makeCanvas()
-						local tweenTransparency = isIn and 0 or 1
-						local tweenScale = isIn and 1 or 0.95
-						local stateTransparency = isIn and 1 or 0
 						local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Sine)
-						local canvasTween = Tween(canvas, tweenInfo, { GroupTransparency = tweenTransparency })
-						local scaleTween = Tween(promptUIScale, tweenInfo, { Scale = tweenScale })
-
+						local scaleTween = Tween(promptUIScale, tweenInfo, { Scale = isIn and 1 or 0.95 })
 						colorPicker.Visible = true
 						colorPicker.Parent = canvas
 						canvas.Visible = true
-						canvas.GroupTransparency = stateTransparency
-						canvasTween:Play()
 						scaleTween:Play()
-						canvasTween.Completed:Wait()
-
+						scaleTween.Completed:Wait()
 						if not isIn then
 							colorPicker.Visible = false
 							canvas.Visible = false
 						end
-
 						colorPicker.Parent = base
 						canvas:Destroy()
 					end
@@ -6190,14 +6180,14 @@ function MacLib:Window(Settings)
 	function WindowFunctions:Dialog(Settings)
 		local DialogFunctions = {}
 
-		local dialogCanvas = Instance.new("CanvasGroup")
+		local dialogCanvas = Instance.new("Frame")
 		dialogCanvas.Name = "DialogCanvas"
 		dialogCanvas.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		dialogCanvas.BackgroundTransparency = 1
 		dialogCanvas.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		dialogCanvas.BorderSizePixel = 0
 		dialogCanvas.Size = UDim2.fromScale(1, 1)
-		dialogCanvas.GroupTransparency = 1
+		dialogCanvas.Visible = false
 		dialogCanvas.Parent = base
 
 		local dialog = Instance.new("Frame")
@@ -6336,15 +6326,16 @@ function MacLib:Window(Settings)
 
 		dialog.Parent = dialogCanvas
 
-		local canvasIn = Tween(dialogCanvas, TweenInfo.new(0.1, Enum.EasingStyle.Sine), { GroupTransparency = 0 })
-		local canvasOut = Tween(dialogCanvas, TweenInfo.new(0.1, Enum.EasingStyle.Sine), { GroupTransparency = 1 })
+		local canvasIn = Tween(promptUIScale, TweenInfo.new(0.1, Enum.EasingStyle.Sine), { Scale = 1 })
+		local canvasOut = Tween(promptUIScale, TweenInfo.new(0.1, Enum.EasingStyle.Sine), { Scale = 0.95 })
 
-		local scaleIn = Tween(promptUIScale, TweenInfo.new(0.1, Enum.EasingStyle.Sine), { Scale = 1 })
-		local scaleOut = Tween(promptUIScale, TweenInfo.new(0.1, Enum.EasingStyle.Sine), { Scale = 0.95 })
+		local scaleIn = canvasIn
+		local scaleOut = canvasOut
 
 		local function dialogIn()
+			dialogCanvas.Visible = true
+			dialog.Parent = dialogCanvas
 			canvasIn:Play()
-			scaleIn:Play()
 			canvasIn.Completed:Wait()
 			dialog.Parent = base
 		end
@@ -6353,7 +6344,6 @@ function MacLib:Window(Settings)
 			if not dialog.Parent then return end
 			dialog.Parent = dialogCanvas
 			canvasOut:Play()
-			scaleOut:Play()
 			canvasOut.Completed:Wait()
 			dialogCanvas:Destroy()
 		end
@@ -6413,7 +6403,7 @@ function MacLib:Window(Settings)
 			end
 
 			button.MouseButton1Click:Connect(function()
-				if dialogCanvas.GroupTransparency ~= 0 then return end
+				if not dialogCanvas.Visible then return end
 				if v.Callback then
 					v.Callback()
 				end
