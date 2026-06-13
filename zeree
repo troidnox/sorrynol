@@ -2375,7 +2375,7 @@ function MacLib:Window(Settings)
 				sectionCard.Parent = sectionOuter
 
 				local sectionCorner = Instance.new("UICorner")
-				sectionCorner.CornerRadius = UDim.new(0, 12)
+				sectionCorner.CornerRadius = UDim.new(0, 18)
 				sectionCorner.Parent = sectionCard
 
 				local sectionStroke = Instance.new("UIStroke")
