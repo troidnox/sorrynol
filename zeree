@@ -6992,36 +6992,6 @@ function MacLib:Window(Settings)
 	function WindowFunctions:ResetCursorIcon() MacLib:ResetCursorIcon() end
 	function WindowFunctions:AddFloatingLabel(text) return MacLib:AddFloatingLabel(text) end
 
-	-- Auto loading screen: shows on every script load, detects current game
-	do
-		local gameName = "Unknown"
-		pcall(function() gameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name end)
-		if gameName == "Unknown" then pcall(function() gameName = game.Name end) end
-
-		local _autoLoading = MacLib:CreateLoading({
-			Title    = Settings.Title or "Zero Hub",
-			Subtitle = gameName,
-			Logo     = Settings.Image or "rbxassetid://124065951370906",
-			Music    = false,
-		})
-		MacLib._autoLoading = _autoLoading
-
-		-- Wrap LoadAutoLoadConfig to show a step and finish on completion
-		local _origLoadAuto = MacLib.LoadAutoLoadConfig
-		function MacLib:LoadAutoLoadConfig()
-			if MacLib._autoLoading then
-				MacLib._autoLoading:SetStep(1, 1, "Loading config...")
-			end
-			_origLoadAuto(self)
-			task.delay(0.3, function()
-				if MacLib._autoLoading then
-					MacLib._autoLoading:Finish()
-					MacLib._autoLoading = nil
-				end
-			end)
-		end
-	end
-
 	return WindowFunctions
 end
 
