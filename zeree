@@ -721,6 +721,16 @@ function MacLib:Window(Settings)
 	end
 
 	local WindowFunctions = {Settings = Settings}
+
+	-- Obsidian signal tracking: declare here so giveSignal is in scope for the whole Window function
+	local _signals = {}
+	local _unloadCbs = {}
+	local function giveSignal(conn)
+		if conn and (typeof(conn) == "RBXScriptConnection" or typeof(conn) == "RBXScriptSignal") then
+			table.insert(_signals, conn)
+		end
+		return conn
+	end
 	if Settings.AcrylicBlur ~= nil then
 		acrylicBlur = Settings.AcrylicBlur
 	else
@@ -6244,16 +6254,6 @@ function MacLib:Window(Settings)
 
 	function WindowFunctions:GetState()
 		return windowState
-	end
-
-	local _signals = {}
-	local _unloadCbs = {}
-
-	local function giveSignal(conn)
-		if conn and (typeof(conn) == "RBXScriptConnection" or typeof(conn) == "RBXScriptSignal") then
-			table.insert(_signals, conn)
-		end
-		return conn
 	end
 
 	local onUnloadCallback
