@@ -5793,20 +5793,147 @@ function MacLib:Window(Settings)
 					Name = "Set as autoload",
 					Callback = function()
 						local name = configSelection.Value
+						if not name then
+							WindowFunctions:Notify({ Title = "Interface", Description = "No config selected." })
+							return
+						end
 						writefile(MacLib.Folder .. "/settings/autoload.txt", name)
-						autoloadLabel:UpdateName("Autoload config: " .. name)
-						WindowFunctions:Notify({
-							Title = "Interface",
-							Description = string.format("Set %q as autoload", name),
-						})
+						autoloadLabel:UpdateName("Autoload: " .. name)
+						WindowFunctions:Notify({ Title = "Interface", Description = string.format("Set %q as autoload", name) })
 					end,
 				})
 
-				autoloadLabel = configSection:Label({Text = "Autoload config: None"})
+				configSection:Button({
+					Name = "Reset Autoload",
+					Callback = function()
+						if isfile(MacLib.Folder .. "/settings/autoload.txt") then
+							writefile(MacLib.Folder .. "/settings/autoload.txt", "")
+						end
+						autoloadLabel:UpdateName("Autoload: None")
+						WindowFunctions:Notify({ Title = "Interface", Description = "Autoload cleared." })
+					end,
+				})
+
+				autoloadLabel = configSection:Label({Text = "Autoload: None"})
 
 				if isfile(MacLib.Folder .. "/settings/autoload.txt") then
 					local name = readfile(MacLib.Folder .. "/settings/autoload.txt")
-					autoloadLabel:UpdateName("Autoload config: " .. name)
+					if name and name ~= "" then
+						autoloadLabel:UpdateName("Autoload: " .. name)
+					end
+				end
+
+				-- ── Theme Config Section ──────────────────────────────────
+				local themeSection = TabFunctions:Section({ Side = "Left" })
+				themeSection:Header({ Text = "Themes" })
+
+				local themeInputPath = nil
+
+				themeSection:Input({
+					Name = "Theme Name",
+					Placeholder = "Name",
+					AcceptedCharacters = "All",
+					Callback = function(input) themeInputPath = input end,
+				})
+
+				local themeSelection = themeSection:Dropdown({
+					Name = "Select Theme",
+					Multi = false,
+					Required = false,
+					Options = MacLib:RefreshThemeList(),
+					Callback = function() end,
+				})
+
+				themeSection:Button({
+					Name = "Save Theme",
+					Callback = function()
+						if not themeInputPath or string.gsub(themeInputPath, " ", "") == "" then
+							WindowFunctions:Notify({ Title = "Interface", Description = "Theme name cannot be empty." })
+							return
+						end
+						local suc, err = MacLib:SaveThemeConfig(themeInputPath)
+						if not suc then
+							WindowFunctions:Notify({ Title = "Interface", Description = "Error saving theme: " .. tostring(err) })
+							return
+						end
+						WindowFunctions:Notify({ Title = "Interface", Description = string.format("Saved theme %q", themeInputPath) })
+						themeSelection:ClearOptions(); themeSelection:InsertOptions(MacLib:RefreshThemeList())
+					end,
+				})
+
+				themeSection:Button({
+					Name = "Load Theme",
+					Callback = function()
+						local name = themeSelection.Value
+						if not name then
+							WindowFunctions:Notify({ Title = "Interface", Description = "No theme selected." })
+							return
+						end
+						local suc, err = MacLib:LoadThemeConfig(name)
+						if not suc then
+							WindowFunctions:Notify({ Title = "Interface", Description = "Error loading theme: " .. tostring(err) })
+							return
+						end
+						WindowFunctions:Notify({ Title = "Interface", Description = string.format("Loaded theme %q", name) })
+					end,
+				})
+
+				themeSection:Button({
+					Name = "Overwrite Theme",
+					Callback = function()
+						local name = themeSelection.Value
+						if not name then
+							WindowFunctions:Notify({ Title = "Interface", Description = "No theme selected." })
+							return
+						end
+						local suc, err = MacLib:SaveThemeConfig(name)
+						if not suc then
+							WindowFunctions:Notify({ Title = "Interface", Description = "Error saving theme: " .. tostring(err) })
+							return
+						end
+						WindowFunctions:Notify({ Title = "Interface", Description = string.format("Overwrote theme %q", name) })
+					end,
+				})
+
+				themeSection:Button({
+					Name = "Refresh Theme List",
+					Callback = function()
+						themeSelection:ClearOptions(); themeSelection:InsertOptions(MacLib:RefreshThemeList())
+					end,
+				})
+
+				local themeAutoloadLabel
+
+				themeSection:Button({
+					Name = "Set Theme Autoload",
+					Callback = function()
+						local name = themeSelection.Value
+						if not name then
+							WindowFunctions:Notify({ Title = "Interface", Description = "No theme selected." })
+							return
+						end
+						writefile(MacLib.Folder .. "/themes/autoload.txt", name)
+						themeAutoloadLabel:UpdateName("Autoload: " .. name)
+						WindowFunctions:Notify({ Title = "Interface", Description = string.format("Set theme autoload: %q", name) })
+					end,
+				})
+
+				themeSection:Button({
+					Name = "Reset Theme Autoload",
+					Callback = function()
+						if isfile(MacLib.Folder .. "/themes/autoload.txt") then
+							writefile(MacLib.Folder .. "/themes/autoload.txt", "")
+						end
+						themeAutoloadLabel:UpdateName("Autoload: None")
+						WindowFunctions:Notify({ Title = "Interface", Description = "Theme autoload cleared." })
+					end,
+				})
+
+				themeAutoloadLabel = themeSection:Label({ Text = "Autoload: None" })
+
+				if isfile(MacLib.Folder .. "/themes/autoload.txt") then
+					local name = readfile(MacLib.Folder .. "/themes/autoload.txt")
+					if name and name ~= "" then themeAutoloadLabel:UpdateName("Autoload: " .. name) end
 				end
 			end
 
@@ -6537,7 +6664,8 @@ function MacLib:Window(Settings)
 
 		local paths = {
 			MacLib.Folder,
-			MacLib.Folder .. "/settings"
+			MacLib.Folder .. "/settings",
+			MacLib.Folder .. "/themes"
 		}
 
 		for i = 1, #paths do
@@ -6567,6 +6695,68 @@ function MacLib:Window(Settings)
 				Description = string.format("Autoloaded config: %q", name),
 			})
 		end
+
+		if isfile(MacLib.Folder .. "/themes/autoload.txt") then
+			local name = readfile(MacLib.Folder .. "/themes/autoload.txt")
+			MacLib:LoadThemeConfig(name)
+		end
+	end
+
+	function MacLib:SaveThemeConfig(Path)
+		if isStudio or not writefile then return false, "Config system unavailable." end
+		if not Path or string.gsub(Path, " ", "") == "" then return false, "Please enter a theme name." end
+
+		local data = { objects = {} }
+		for flag, option in next, MacLib.Options do
+			if not option.ThemeOnly then continue end
+			if not ClassParser[option.Class] then continue end
+			table.insert(data.objects, ClassParser[option.Class].Save(flag, option))
+		end
+
+		local success, encoded = pcall(HttpService.JSONEncode, HttpService, data)
+		if not success then return false, "Unable to encode theme data." end
+
+		writefile(MacLib.Folder .. "/themes/" .. Path .. ".json", encoded)
+		return true
+	end
+
+	function MacLib:LoadThemeConfig(Path)
+		if isStudio or not (isfile and readfile) then return false, "Config system unavailable." end
+		if not Path then return false, "Please select a theme." end
+
+		local file = MacLib.Folder .. "/themes/" .. Path .. ".json"
+		if not isfile(file) then return false, "Theme not found." end
+
+		local success, decoded = pcall(HttpService.JSONDecode, HttpService, readfile(file))
+		if not success then return false, "Unable to decode theme data." end
+
+		for _, option in next, decoded.objects do
+			if ClassParser[option.type] then
+				task.spawn(function() ClassParser[option.type].Load(option.flag, option) end)
+			end
+		end
+		return true
+	end
+
+	function MacLib:RefreshThemeList()
+		if isStudio or not (isfolder and listfiles) then return {} end
+		local list = (isfolder(MacLib.Folder) and isfolder(MacLib.Folder .. "/themes")) and listfiles(MacLib.Folder .. "/themes") or {}
+		local out = {}
+		for i = 1, #list do
+			local file = list[i]
+			if file:sub(-5) == ".json" then
+				local pos = file:find(".json", 1, true)
+				local start = pos
+				local char = file:sub(pos, pos)
+				while char ~= "/" and char ~= "\\" and char ~= "" do
+					pos = pos - 1; char = file:sub(pos, pos)
+				end
+				if char == "/" or char == "\\" then
+					table.insert(out, file:sub(pos + 1, start - 1))
+				end
+			end
+		end
+		return out
 	end
 
 	function MacLib:SetFolder(Folder)
@@ -6592,6 +6782,7 @@ function MacLib:Window(Settings)
 		for flag, option in next, MacLib.Options do
 			if not ClassParser[option.Class] then continue end
 			if option.IgnoreConfig then continue end
+			if option.ThemeOnly then continue end
 
 			table.insert(data.objects, ClassParser[option.Class].Save(flag, option))
 		end	
