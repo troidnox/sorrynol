@@ -3068,7 +3068,7 @@ function MacLib:Window(Settings)
 						pcall(function() sliderBar.Size = UDim2.new(sliderBar.Size.X.Scale, newBarWidth, sliderBar.Size.Y.Scale, sliderBar.Size.Y.Offset) end)
 					end
 
-					updateSliderBarSize()
+
 
 					function SliderFunctions:UpdateName(Name)
 						sliderName = Name
