@@ -6528,6 +6528,14 @@ function MacLib:Window(Settings)
 		return acrylicBlur
 	end
 
+	function WindowFunctions:SetTransparency(val)
+		base.BackgroundTransparency = math.clamp(val, 0, 1)
+	end
+
+	function WindowFunctions:GetTransparency()
+		return base.BackgroundTransparency
+	end
+
 	local function _SetUserInfoState(State)
 		-- logo and text are static, nothing to toggle
 	end
