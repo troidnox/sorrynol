@@ -1527,6 +1527,28 @@ function MacLib:Window(Settings)
 		end
 	end))
 
+	-- Information area (logo + title) is also draggable
+	local infoInteract = Instance.new("TextButton")
+	infoInteract.Name = "InfoInteract"
+	infoInteract.BackgroundTransparency = 1
+	infoInteract.BorderSizePixel = 0
+	infoInteract.Text = ""
+	infoInteract.Size = UDim2.fromScale(1, 1)
+	infoInteract.ZIndex = 0
+	infoInteract.Parent = information
+
+	infoInteract.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			onDragStart(input)
+		end
+	end)
+	infoInteract.InputChanged:Connect(onDragUpdate)
+	infoInteract.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging_ = false
+		end
+	end)
+
 	-- Obsidian-style search bar replacing the static tab label
 	local searchBar = Instance.new("TextBox")
 	searchBar.Name = "SearchBar"
@@ -6610,6 +6632,10 @@ function MacLib:Window(Settings)
 					local ok, kc = pcall(function() return Enum.KeyCode[data.bind] end)
 					if ok and kc then
 						MacLib.Options[Flag]:Bind(kc)
+						local settings = MacLib.Options[Flag].Settings
+						if settings and settings.onBinded then
+							pcall(settings.onBinded, kc)
+						end
 					end
 				end
 			end
