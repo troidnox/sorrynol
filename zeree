@@ -954,7 +954,7 @@ function MacLib:Window(Settings)
 	exit.TextColor3 = Color3.fromRGB(0, 0, 0)
 	exit.TextSize = 14
 	exit.AutoButtonColor = false
-	exit.BackgroundColor3 = Color3.fromRGB(250, 93, 86)
+	exit.BackgroundColor3 = Color3.fromRGB(255, 96, 87)
 	exit.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	exit.BorderSizePixel = 0
 
@@ -972,7 +972,7 @@ function MacLib:Window(Settings)
 	minimize.TextColor3 = Color3.fromRGB(0, 0, 0)
 	minimize.TextSize = 14
 	minimize.AutoButtonColor = false
-	minimize.BackgroundColor3 = Color3.fromRGB(252, 190, 57)
+	minimize.BackgroundColor3 = Color3.fromRGB(255, 189, 46)
 	minimize.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	minimize.BorderSizePixel = 0
 	minimize.LayoutOrder = 1
@@ -991,7 +991,7 @@ function MacLib:Window(Settings)
 	maximize.TextColor3 = Color3.fromRGB(0, 0, 0)
 	maximize.TextSize = 14
 	maximize.AutoButtonColor = false
-	maximize.BackgroundColor3 = Color3.fromRGB(119, 174, 94)
+	maximize.BackgroundColor3 = Color3.fromRGB(39, 201, 63)
 	maximize.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	maximize.BorderSizePixel = 0
 	maximize.LayoutOrder = 1
