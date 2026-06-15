@@ -5780,6 +5780,25 @@ function MacLib:Window(Settings)
 					end,
 				})
 
+				configSection:Button({
+					Name = "Delete Config",
+					Callback = function()
+						local name = configSelection.Value
+						if not name then
+							WindowFunctions:Notify({ Title = "Interface", Description = "No config selected." })
+							return
+						end
+						local success, err = MacLib:DeleteConfig(name)
+						if not success then
+							WindowFunctions:Notify({ Title = "Interface", Description = "Error deleting config: " .. tostring(err) })
+							return
+						end
+						WindowFunctions:Notify({ Title = "Interface", Description = string.format("Deleted config %q", name) })
+						configSelection:ClearOptions()
+						configSelection:InsertOptions(MacLib:RefreshConfigList())
+					end,
+				})
+
 				local autoloadLabel
 
 				configSection:Button({
@@ -5817,7 +5836,7 @@ function MacLib:Window(Settings)
 				end
 
 				-- ── Theme Config Section ──────────────────────────────────
-				local themeSection = TabFunctions:Section({ Side = "Left" })
+				local themeSection = TabFunctions:Section({ Side = "Right" })
 				themeSection:Header({ Text = "Themes" })
 
 				local themeInputPath = nil
@@ -6798,6 +6817,15 @@ function MacLib:Window(Settings)
 		end
 
 		writefile(fullPath, encoded)
+		return true
+	end
+
+	function MacLib:DeleteConfig(Path)
+		if isStudio or not (delfile and isfile) then return false, "Cannot delete files in this environment." end
+		if not Path or string.gsub(Path, " ", "") == "" then return false, "No config selected." end
+		local fullPath = MacLib.Folder .. "/settings/" .. Path .. ".json"
+		if not isfile(fullPath) then return false, "Config not found." end
+		pcall(delfile, fullPath)
 		return true
 	end
 
