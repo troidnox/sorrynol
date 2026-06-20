@@ -42,7 +42,7 @@ local tabIndex = 0
 local unloaded = false
 
 local assets = {
-	interFont = "rbxassetid://12187365364",
+	interFont = "rbxasset://fonts/families/GothamSSm.json",
 	userInfoBlurred = "rbxassetid://18824089198",
 	toggleBackground = "rbxassetid://18772190202",
 	togglerHead = "rbxassetid://18772309008",
@@ -104,20 +104,21 @@ end
 local function GetGui()
 	local newGui = Instance.new("ScreenGui")
 	newGui.ResetOnSpawn = false
-	newGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	newGui.DisplayOrder = 10
+	newGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+	newGui.DisplayOrder = 999
 
 	if RunService:IsStudio() then
 		newGui.Parent = LocalPlayer:FindFirstChild("PlayerGui")
 	else
 		SafeParentUI(newGui)
 	end
+	MacLib._screenGui = newGui
 	return newGui
 end
 
 -- Cursor state (frames created inside MacLib:Window after macLib ScreenGui exists)
 local _cursor, _cursorV
-local _mouse = LocalPlayer:GetMouse()
+local _mouse = (cloneref and cloneref(LocalPlayer:GetMouse())) or LocalPlayer:GetMouse()
 local _cursorBinding = "RS_"..game:GetService("HttpService"):GenerateGUID(false):sub(1,8)
 local _oldMouseIcon = true
 
@@ -215,11 +216,7 @@ function MacLib:AddFloatingLabel(text)
 	holder.BorderSizePixel = 0
 	holder.Position = UDim2.fromOffset(6, 6)
 	holder.ZIndex = 10
-	local _floatSG = Instance.new("ScreenGui")
-	_floatSG.ResetOnSpawn = false
-	_floatSG.DisplayOrder = 5
-	SafeParentUI(_floatSG)
-	holder.Parent = _floatSG
+	holder.Parent = MacLib._screenGui or GetGui()
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
@@ -310,8 +307,8 @@ function MacLib:CreateLoading(info)
 
 	local sg = Instance.new("ScreenGui")
 	sg.ResetOnSpawn = false
-	sg.DisplayOrder = 10
-	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	sg.DisplayOrder = 999
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Global
 	SafeParentUI(sg)
 
 	-- Dim overlay (fades in)
@@ -753,7 +750,7 @@ function MacLib:Window(Settings)
 	-- (applying to ScreenGui would break cursor positioning)
 
 	-- Cursor (white crosshair with dark outline)
-	-- ScreenGui uses ZIndexBehavior.Sibling: children always render above parents regardless of ZIndex.
+	-- ScreenGui uses ZIndexBehavior.Global: children always render above parents regardless of ZIndex.
 	-- ZIndex only controls sibling order. Fix: all 4 pieces are siblings inside a transparent
 	-- container — white arms at ZIndex 2, dark outlines at ZIndex 1. White renders on top. ✓
 	_cursor = Instance.new("Frame")
@@ -1217,7 +1214,7 @@ function MacLib:Window(Settings)
 	local displayName = Instance.new("TextLabel")
 	displayName.FontFace = Font.new(assets.interFont, Enum.FontWeight.SemiBold)
 	displayName.RichText = true
-	displayName.Text = "<font color=\"rgb(178,120,255)\">Zero</font> <font color=\"rgb(138,79,255)\">Hub</font>"
+	displayName.Text = ""
 	displayName.TextColor3 = Color3.fromRGB(255, 255, 255)
 	displayName.TextSize = 13
 	displayName.TextTransparency = 0.05
@@ -1230,7 +1227,7 @@ function MacLib:Window(Settings)
 
 	local username = Instance.new("TextLabel")
 	username.FontFace = Font.new(assets.interFont)
-	username.Text = "v2.1  ·  discord.gg/zerohub"
+	username.Text = ""
 	username.TextColor3 = Color3.fromRGB(255, 255, 255)
 	username.TextSize = 11
 	username.TextTransparency = 0.65
@@ -4652,7 +4649,7 @@ function MacLib:Window(Settings)
 
 					local confirm = Instance.new("TextButton")
 					confirm.FontFace = Font.new(
-						"rbxassetid://12187365364",
+						assets.interFont,
 						Enum.FontWeight.Medium,
 						Enum.FontStyle.Normal
 					)
@@ -4683,7 +4680,7 @@ function MacLib:Window(Settings)
 
 					local cancel = Instance.new("TextButton")
 					cancel.FontFace = Font.new(
-						"rbxassetid://12187365364",
+						assets.interFont,
 						Enum.FontWeight.Medium,
 						Enum.FontStyle.Normal
 					)
@@ -4735,7 +4732,7 @@ function MacLib:Window(Settings)
 
 					local paragraphHeader = Instance.new("TextLabel")
 					paragraphHeader.FontFace = Font.new(
-						"rbxassetid://12187365364",
+						assets.interFont,
 						Enum.FontWeight.SemiBold,
 						Enum.FontStyle.Normal
 					)
