@@ -6599,12 +6599,7 @@ function MacLib:Window(Settings)
 
 	macLib.Enabled = false
 
-	local assetList = {}
-	for _, assetId in pairs(assets) do
-		table.insert(assetList, assetId)
-	end
-
-	ContentProvider:PreloadAsync(assetList)
+	-- Assets load lazily on use, no PreloadAsync needed
 	macLib.Enabled = true
 	windowState = true
 
