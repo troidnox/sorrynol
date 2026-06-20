@@ -1698,6 +1698,7 @@ function MacLib:Window(Settings)
 
 	local DepthOfField
 
+	if acrylicBlur then
 	for _,v in pairs(Lighting:GetChildren()) do
 		if not v:IsA("DepthOfFieldEffect") and v:HasTag(".") then
 			DepthOfField = Instance.new('DepthOfFieldEffect')
@@ -1720,6 +1721,7 @@ function MacLib:Window(Settings)
 		DepthOfField.NearIntensity = 1
 		DepthOfField.Name = HS:GenerateGUID(true)
 		DepthOfField:AddTag(".")
+	end
 	end
 
 	local frame = Instance.new('Frame')
@@ -1858,15 +1860,14 @@ function MacLib:Window(Settings)
 		if not IsVisible(frame) or not acrylicBlur or unloaded then
 			for _, pt in pairs(parts) do
 				pt.Parent = nil
-				DepthOfField.Enabled = false
-				DepthOfField.Parent = nil
 			end
+			if DepthOfField then DepthOfField.Enabled = false; DepthOfField.Parent = nil end
 			return
 		end
-		if not DepthOfField.Parent then
+		if DepthOfField and not DepthOfField.Parent then
 			DepthOfField.Parent = Lighting
 		end
-		DepthOfField.Enabled = true
+		if DepthOfField then DepthOfField.Enabled = true end
 		local properties = {
 			Transparency = 0.98;
 			BrickColor = BrickColor.new('Institutional white');
