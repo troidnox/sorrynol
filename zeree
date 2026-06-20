@@ -3047,6 +3047,7 @@ function MacLib:Window(Settings)
 					inputBoxUISizeConstraint.Parent = inputBox
 
 					inputBox.Parent = input
+					InputFunctions.InputBox = inputBox
 
 					local Input = input
 					local InputBox = inputBox
@@ -4785,11 +4786,11 @@ function MacLib:Window(Settings)
 					local colour = color
 
 					local modifierInputs = {
-						Hex = hex.InputBox,
-						Red = red.InputBox,
-						Green = green.InputBox,
-						Blue = blue.InputBox,
-						Alpha = alpha.InputBox
+						Hex = hex:FindFirstChildOfClass("TextBox"),
+						Red = red:FindFirstChildOfClass("TextBox"),
+						Green = green:FindFirstChildOfClass("TextBox"),
+						Blue = blue:FindFirstChildOfClass("TextBox"),
+						Alpha = alpha:FindFirstChildOfClass("TextBox")
 					}
 
 					local Mouse = LocalPlayer:GetMouse()
