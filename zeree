@@ -208,9 +208,6 @@ end
 -- FEATURE: Draggable Floating Labels
 -- ============================================================
 function MacLib:AddFloatingLabel(text)
-	local macGui = (gethui and gethui())
-		or (cloneref and cloneref(MacLib.GetService("CoreGui")) or MacLib.GetService("CoreGui"))
-
 	local holder = Instance.new("Frame")
 	holder.AutomaticSize = Enum.AutomaticSize.XY
 	holder.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -218,7 +215,11 @@ function MacLib:AddFloatingLabel(text)
 	holder.BorderSizePixel = 0
 	holder.Position = UDim2.fromOffset(6, 6)
 	holder.ZIndex = 10
-	holder.Parent = macGui
+	local _floatSG = Instance.new("ScreenGui")
+	_floatSG.ResetOnSpawn = false
+	_floatSG.DisplayOrder = 5
+	SafeParentUI(_floatSG)
+	holder.Parent = _floatSG
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 8)
