@@ -143,6 +143,8 @@ end
 -- ============================================================
 -- FEATURE: DPI Scaling
 -- ============================================================
+MacLib._dragLocked = false
+MacLib.IsMobile = false
 function MacLib:SetDPIScale(scale)
 	scale = math.clamp(scale, 0.5, 3)
 	MacLib._dpi = scale
@@ -841,7 +843,25 @@ function MacLib:Window(Settings)
 	base.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	base.BorderSizePixel = 0
 	base.Position = UDim2.fromScale(0.5, 0.5)
-	base.Size = Settings.Size or UDim2.fromOffset(868, 650)
+
+	-- Mobile detection (early, before sizing)
+	local isMobile = (function()
+		local ok, plat = pcall(function() return UserInputService:GetPlatform() end)
+		if ok then
+			return plat == Enum.Platform.Android or plat == Enum.Platform.IOS
+		end
+		return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+	end)()
+	MacLib.IsMobile = isMobile
+
+	-- Viewport-aware sizing (Obsidian style)
+	local viewportSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+	local maxW = viewportSize.X - 64
+	local maxH = viewportSize.Y - 64
+	local defaultSize = Settings.Size or UDim2.fromOffset(868, 650)
+	local clampedW = math.clamp(defaultSize.X.Offset, isMobile and 380 or 480, maxW)
+	local clampedH = math.clamp(defaultSize.Y.Offset, isMobile and 240 or 360, maxH)
+	base.Size = UDim2.fromOffset(clampedW, clampedH)
 
 	-- register base so SetScheme("BackgroundColor") live-updates the window
 	if MacLib._accentElements then
@@ -849,7 +869,7 @@ function MacLib:Window(Settings)
 	end
 
 	local baseUIScale = Instance.new("UIScale")
-	baseUIScale.Scale = MacLib._dpi
+	baseUIScale.Scale = isMobile and (MacLib._dpi * 0.8) or MacLib._dpi
 	baseUIScale.Parent = base
 	table.insert(MacLib._scales, baseUIScale)
 
@@ -1413,6 +1433,7 @@ function MacLib:Window(Settings)
 
 	local function onDragStart(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if MacLib._dragLocked then return end
 			dragging_ = true
 			dragStart = input.Position
 			startPos = base.Position
@@ -1637,6 +1658,11 @@ function MacLib:Window(Settings)
 			local loc = UserInputService:GetMouseLocation()
 			local newW = math.max(MacLib._minSize.X, _rStartW + (loc.X - _rStartX))
 			local newH = math.max(MacLib._minSize.Y, _rStartH + (loc.Y - _rStartY))
+			if MacLib.IsMobile then
+				local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+				newW = math.min(newW, vp.X - 32)
+				newH = math.min(newH, vp.Y - 32)
+			end
 			base.Size = UDim2.fromOffset(newW, newH)
 			-- like Obsidian's resize callback: update content frame to fill remaining space
 			local sideW = sidebar.Size.X.Offset > 0
@@ -6604,73 +6630,100 @@ function MacLib:Window(Settings)
 	macLib.Enabled = true
 	windowState = true
 
-	-- Mobile support — draggable toggle button (Obsidian style)
-	local isMobile = (function()
-		local ok, plat = pcall(function() return UserInputService:GetPlatform() end)
-		if ok then
-			return plat == Enum.Platform.Android or plat == Enum.Platform.IOS
-		end
-		return UserInputService.TouchEnabled and not UserInputService.MouseEnabled
-	end)()
-
+	-- Mobile support — draggable Toggle + Lock buttons (Obsidian style)
 	if isMobile then
 		_showCursor(false) -- no crosshair on mobile
 
-		local mobileBtn = Instance.new("TextButton")
-		mobileBtn.Text = "☰"
-		mobileBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		mobileBtn.TextSize = 20
-		mobileBtn.Font = Enum.Font.GothamBold
-		mobileBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-		mobileBtn.BackgroundTransparency = 0.1
-		mobileBtn.BorderSizePixel = 0
-		mobileBtn.Size = UDim2.fromOffset(44, 44)
-		mobileBtn.Position = UDim2.fromOffset(6, 6)
-		mobileBtn.ZIndex = 11000
-		mobileBtn.AutoButtonColor = false
-		mobileBtn.Parent = macLib
+		local function makeMobileButton(text, yPos)
+			local btn = Instance.new("TextButton")
+			btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			btn.TextSize = 14
+			btn.FontFace = Font.new(assets.interFont, Enum.FontWeight.SemiBold)
+			btn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+			btn.BackgroundTransparency = 0.1
+			btn.BorderSizePixel = 0
+			btn.AutoButtonColor = false
+			btn.ZIndex = 11000
+			btn.Parent = macLib
 
-		local mobileBtnCorner = Instance.new("UICorner")
-		mobileBtnCorner.CornerRadius = UDim.new(0, 8)
-		mobileBtnCorner.Parent = mobileBtn
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = btn
 
-		local mobileBtnStroke = Instance.new("UIStroke")
-		mobileBtnStroke.Color = Color3.fromRGB(138, 79, 255)
-		mobileBtnStroke.Transparency = 0.5
-		mobileBtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		mobileBtnStroke.Parent = mobileBtn
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(138, 79, 255)
+			stroke.Transparency = 0.5
+			stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			stroke.Parent = btn
 
-		-- Draggable + tap to toggle
-		local _dragging, _dragStart, _startPos = false, nil, nil
-		local DRAG_THRESHOLD = 0.25 -- seconds to distinguish drag from tap
+			-- Size to text
+			local textW = game:GetService("TextService"):GetTextSize(text, 14, Enum.Font.GothamBold, Vector2.new(200, 44)).X
+			btn.Size = UDim2.fromOffset(math.max(textW + 20, 50), 34)
+			btn.Text = text
+			btn.Position = UDim2.fromOffset(6, yPos)
 
-		mobileBtn.InputBegan:Connect(function(inp)
-			if inp.UserInputType ~= Enum.UserInputType.Touch then return end
-			_dragging = false
-			_dragStart = tick()
-			_startPos = mobileBtn.Position
-			local startTouch = inp.Position
+			-- Draggable + tap
+			local _dragging, _dragStart, _startPos = false, nil, nil
+			local DRAG_THRESHOLD = 0.25
 
-			local moveConn, endConn
-			moveConn = inp.Changed:Connect(function()
-				if inp.UserInputState == Enum.UserInputState.Change then
-					_dragging = true
-					local delta = inp.Position - startTouch
-					mobileBtn.Position = UDim2.fromOffset(
-						math.clamp(_startPos.X.Offset + delta.X, 0, macLib.AbsoluteSize.X - 44),
-						math.clamp(_startPos.Y.Offset + delta.Y, 0, macLib.AbsoluteSize.Y - 44)
-					)
-				elseif inp.UserInputState == Enum.UserInputState.End then
-					if moveConn then moveConn:Disconnect() end
-					if endConn  then endConn:Disconnect()  end
-					-- tap = short press without significant movement
-					if tick() - _dragStart < DRAG_THRESHOLD and not _dragging then
-						ToggleMenu()
+			btn.InputBegan:Connect(function(inp)
+				if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+				_dragging = false
+				_dragStart = tick()
+				_startPos = btn.Position
+				local startTouch = inp.Position
+
+				inp.Changed:Connect(function()
+					if inp.UserInputState == Enum.UserInputState.Change then
+						_dragging = true
+						local delta = inp.Position - startTouch
+						btn.Position = UDim2.fromOffset(
+							math.clamp(_startPos.X.Offset + delta.X, 0, macLib.AbsoluteSize.X - btn.AbsoluteSize.X),
+							math.clamp(_startPos.Y.Offset + delta.Y, 0, macLib.AbsoluteSize.Y - btn.AbsoluteSize.Y)
+						)
 					end
-					_dragging = false
+				end)
+			end)
+
+			return btn
+		end
+
+		-- Toggle button
+		local toggleBtn = makeMobileButton("Toggle", 6)
+		toggleBtn.InputBegan:Connect(function(inp)
+			if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+			local start = tick()
+			inp.Changed:Connect(function()
+				if inp.UserInputState == Enum.UserInputState.End then
+					if tick() - start < 0.25 then ToggleMenu() end
 				end
 			end)
 		end)
+
+		-- Lock button
+		local lockBtn = makeMobileButton("Lock", 46)
+		local _lockDrag = false
+		lockBtn.InputBegan:Connect(function(inp)
+			if inp.UserInputType ~= Enum.UserInputType.Touch then return end
+			local start = tick()
+			_lockDrag = false
+			inp.Changed:Connect(function()
+				if inp.UserInputState == Enum.UserInputState.Change then _lockDrag = true end
+				if inp.UserInputState == Enum.UserInputState.End then
+					if tick() - start < 0.25 and not _lockDrag then
+						MacLib._dragLocked = not MacLib._dragLocked
+						lockBtn.Text = MacLib._dragLocked and "Unlock" or "Lock"
+						local tw = game:GetService("TextService"):GetTextSize(lockBtn.Text, 14, Enum.Font.GothamBold, Vector2.new(200, 44)).X
+						lockBtn.Size = UDim2.fromOffset(math.max(tw + 20, 50), 34)
+					end
+				end
+			end)
+		end)
+
+		if Settings.ShowMobileButtons == false then
+			toggleBtn.Visible = false
+			lockBtn.Visible = false
+		end
 	end
 
 	if not isMobile then _showCursor(true) end
