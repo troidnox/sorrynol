@@ -42,7 +42,7 @@ local tabIndex = 0
 local unloaded = false
 
 local assets = {
-	interFont = "rbxasset://fonts/families/GothamSSm.json",
+	interFont = "rbxassetid://12187365364",
 	userInfoBlurred = "rbxassetid://18824089198",
 	toggleBackground = "rbxassetid://18772190202",
 	togglerHead = "rbxassetid://18772309008",
@@ -1214,7 +1214,7 @@ function MacLib:Window(Settings)
 	local displayName = Instance.new("TextLabel")
 	displayName.FontFace = Font.new(assets.interFont, Enum.FontWeight.SemiBold)
 	displayName.RichText = true
-	displayName.Text = ""
+	displayName.Text = "<font color=\"rgb(178,120,255)\">Zero</font> <font color=\"rgb(138,79,255)\">Hub</font>"
 	displayName.TextColor3 = Color3.fromRGB(255, 255, 255)
 	displayName.TextSize = 13
 	displayName.TextTransparency = 0.05
@@ -1227,7 +1227,7 @@ function MacLib:Window(Settings)
 
 	local username = Instance.new("TextLabel")
 	username.FontFace = Font.new(assets.interFont)
-	username.Text = ""
+	username.Text = "v2.1  ·  discord.gg/zerohub"
 	username.TextColor3 = Color3.fromRGB(255, 255, 255)
 	username.TextSize = 11
 	username.TextTransparency = 0.65
