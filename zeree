@@ -1,3 +1,1953 @@
+-- // Zero Hub Security Module
+-- // Injected at framework load time
+local security = (function()
+-- security...
+if type(LPH_JIT_MAX) ~= "function" then LPH_JIT_MAX = function(f) return f end end
+if type(LPH_JIT) ~= "function" then LPH_JIT = function(f) return f end end
+if type(LPH_NO_VIRTUALIZE) ~= "function" then LPH_NO_VIRTUALIZE = function(f) return f end end
+if type(LPH_NO_UPVALUES) ~= "function" then LPH_NO_UPVALUES = function(f) return f end end
+if type(LPH_CRASH) ~= "function" then LPH_CRASH = function() while true do end end end
+if type(LRM_SANITIZE) ~= "function" then
+	LRM_SANITIZE = function(v, _)
+		return tostring(v)
+	end
+end
+
+local security = {
+	first_send = false,
+	current_tick = 0,
+	current_tick_2 = 0,
+	pristine_refs = {},
+	genv_ref = nil,
+	_light_mode = false,
+	_fast_cycle = 0,
+	_asset_cursor = 1,
+	_dex_asset_ids = {
+		"1352543873", "12978095818", "12977615774", "10804731440",
+		"5448127505", "11389137937", "5042114982", "125451561960633",
+		"118425905671666", "95268421208163", "107640924738262",
+		"74833786606286", "9886659406", "103134660123798",
+		"139785960036434", "136413657454848", "87089195419529",
+		"6065775281", "4544052033",
+		"4113050383", "5147488592", "129697930", "5147695474",
+		"3523243755", "4911962991", "5147488658", "5054663650",
+		"1204397029", "6578871732", "1427967925", "6579106223",
+		"5034718180", "6425281788", "6511490623", "5034718129",
+		"9619665977", "6282522798", "137842439297855",
+		"6401617475", "6065821980", "112264959079193", "110803789420086",
+		"169476802", "10055842438",
+		"5642383285", "5642310344", "5034768003", "5060023708",
+		"6234266378", "1281023007", "1072518406", "1072518502",
+		"175964948", "2764171053", "6578933307", "129589545519436",
+	},
+}
+
+-- cached lua functions...
+local lua_xpcall = xpcall
+local lua_pcall = pcall
+local lua_typeof = typeof
+local lua_type = type
+local lua_newproxy = newproxy
+local lua_tostring = tostring
+local lua_loadstring = loadstring
+local lua_rawget = rawget
+local lua_string = string
+local lua_setfenv = setfenv
+local lua_error = error
+local lua_unpack = unpack
+local lua_print = print
+
+local ex_clonefunction = clonefunction
+local ex_isnewcclosure = isnewcclosure
+local ex_isfunctionhooked = isfunctionhooked or ishooked or is_function_hooked
+local ex_hookfunction = hookfunction or hookfunc or replaceclosure
+local ex_restorefunction = restorefunction or restoreclosure
+local ex_queueonteleport = queue_on_teleport or queueonteleport
+local ex_newcclosure = newcclosure
+local ex_getrawmetatable = getrawmetatable
+local ex_isexecutorclosure = isexecutorclosure
+local ex_islclosure = islclosure
+local ex_iscclosure = iscclosure
+local ex_messagebox = messagebox
+local ex_getrenv = getrenv
+local ex_getgenv = getgenv
+local ex_request = request or http_request or (syn and syn.request) or (http and http.request)
+local ex_getexecutorname = getexecutorname or identifyexecutor
+local ex_isfolder = isfolder
+local ex_gethui = gethui or get_hidden_gui
+local ex_getgc = getgc
+local ex_getinstances = getinstances
+
+-- pristine copies via clonefunction...
+local function take_pristine(fn)
+	if not fn or not ex_clonefunction then
+		return fn
+	end
+	local ok, cloned = lua_pcall(ex_clonefunction, fn)
+	if ok and cloned then
+		return cloned
+	end
+	return fn
+end
+
+-- cached debug functions (pristine where possible)...
+local debug_validlevel = take_pristine(debug.validlevel)
+local debug_getstack = take_pristine(debug.getstack)
+local debug_getinfo = take_pristine(debug.getinfo)
+local debug_info = debug.info
+local debug_getproto = debug.getproto
+local debug_getupvalues = debug.getupvalues
+local debug_getconstant = debug.getconstant
+local debug_getfenv = debug.getfenv or getfenv
+local debug_setstack = debug.setstack
+
+local coroutine_create = take_pristine(coroutine.create)
+local coroutine_wrap = take_pristine(coroutine.wrap)
+local coroutine_close = take_pristine(coroutine.close)
+local coroutine_resume = take_pristine(coroutine.resume)
+
+-- store pristine refs for live-vs-clone probes in tick...
+security.pristine_refs.getstack = debug_getstack
+security.pristine_refs.wrap = coroutine_wrap
+security.pristine_refs.isfunctionhooked = take_pristine(isfunctionhooked)
+security.pristine_refs.loadstring = take_pristine(loadstring)
+ex_isfunctionhooked = security.pristine_refs.isfunctionhooked or ex_isfunctionhooked
+local lua_loadstring_pristine = security.pristine_refs.loadstring or lua_loadstring
+
+-- cached task functions...
+local task_spawn = task.spawn
+
+-- set in cache...
+security.cache = {
+	["request"] = ex_request,
+	["loadstring"] = lua_loadstring,
+	["pcall"] = lua_pcall,
+	["print"] = lua_print,
+	["messagebox"] = ex_messagebox,
+	["tostring"] = lua_tostring,
+}
+
+local function json_encode(value)
+	local ok_hs, hs = lua_pcall(function()
+		return game:GetService("HttpService")
+	end)
+	if ok_hs and hs then
+		local ok, encoded = lua_pcall(hs.JSONEncode, hs, value)
+		if ok and lua_typeof(encoded) == "string" then
+			return encoded
+		end
+	end
+	local t = lua_typeof(value)
+	if t == "nil" then
+		return "null"
+	elseif t == "boolean" then
+		return value and "true" or "false"
+	elseif t == "number" then
+		return lua_tostring(value)
+	elseif t == "string" then
+		return '"'
+			.. value
+				:gsub("\\", "\\\\")
+				:gsub('"', '\\"')
+				:gsub("\n", "\\n")
+				:gsub("\r", "\\r")
+				:gsub("\t", "\\t")
+			.. '"'
+	elseif t == "table" then
+		local is_array = (#value > 0)
+		if is_array then
+			local parts = {}
+			for i = 1, #value do
+				parts[i] = json_encode(value[i])
+			end
+			return "[" .. table.concat(parts, ",") .. "]"
+		end
+		local parts = {}
+		for k, v in next, value do
+			parts[#parts + 1] = json_encode(lua_tostring(k)) .. ":" .. json_encode(v)
+		end
+		return "{" .. table.concat(parts, ",") .. "}"
+	end
+	return '""'
+end
+
+local LRM_LIVE = type(LRM_SEND_WEBHOOK) == "function"
+if not LRM_LIVE then
+	LRM_SEND_WEBHOOK = function(url, body)
+		local fn = ex_request
+			or (syn and syn.request)
+			or (http and http.request)
+			or http_request
+			or request
+		if lua_typeof(fn) ~= "function" or lua_typeof(url) ~= "string" then
+			return
+		end
+		lua_pcall(function()
+			fn({
+				Url = url,
+				Method = "POST",
+				Headers = { ["Content-Type"] = "application/json" },
+				Body = json_encode(body),
+			})
+		end)
+	end
+end
+
+-- constants...
+local LUA_MAX_C_CALLS = 200
+local LUA_STACK_CHECK_CELING = 255
+local LUA_PROTO_CHECK_CELING = 255
+local LUA_CONSTANT_CHECK_CELING = 255
+local LUA_SET_STACK_INDICE = 1000
+local ZERO_HUB_WATERMARK = "Zero Hub"
+
+local function get_verified_executor_name()
+	if not ex_getexecutorname then return nil end
+	if ex_iscclosure and not ex_iscclosure(ex_getexecutorname) then return nil end
+	if ex_islclosure and ex_islclosure(ex_getexecutorname) then return nil end
+	local pristine_ifh = security.pristine_refs.isfunctionhooked
+	if pristine_ifh then
+		local ok, hooked = lua_pcall(pristine_ifh, ex_getexecutorname)
+		if ok and hooked then return nil end
+	end
+	if debug_info then
+		local ok, src = lua_pcall(debug_info, ex_getexecutorname, "s")
+		if not ok or src ~= "[C]" then return nil end
+	end
+	local ok, name = lua_pcall(ex_getexecutorname)
+	if not ok or lua_typeof(name) ~= "string" then return nil end
+	return name
+end
+
+local function probe_hook_integrity(on_trip)
+	local pristine_stack = security.pristine_refs.getstack
+	local pristine_wrap = security.pristine_refs.wrap
+	local pristine_hooked = security.pristine_refs.isfunctionhooked
+	local pristine_ls = security.pristine_refs.loadstring
+
+	-- if they can hook, our detectors themselves must not be hooked
+	if pristine_hooked then
+		local function must_be_clean(fn, label)
+			if not fn then
+				return
+			end
+			local ok, hooked = lua_pcall(pristine_hooked, fn)
+			if ok and hooked then
+				return on_trip(label .. " is hooked")
+			end
+		end
+		must_be_clean(ex_isfunctionhooked, "isfunctionhooked")
+		must_be_clean(isfunctionhooked, "live isfunctionhooked")
+		must_be_clean(ex_hookfunction, "hookfunction")
+		must_be_clean(ex_restorefunction, "restorefunction")
+		must_be_clean(ex_newcclosure, "newcclosure")
+		must_be_clean(debug.getstack, "debug.getstack")
+		must_be_clean(coroutine.wrap, "coroutine.wrap")
+		must_be_clean(loadstring, "loadstring")
+		must_be_clean(ex_request, "request")
+	end
+
+	if ex_clonefunction then
+		local function ptr_drift(live, pristine, label)
+			if not live or not pristine or live == pristine then
+				return
+			end
+			local okA, a = lua_pcall(ex_clonefunction, live)
+			local okB, b = lua_pcall(ex_clonefunction, pristine)
+			if okA and okB and a and b and a ~= b and lua_tostring(a) ~= lua_tostring(b) then
+				return on_trip("Pointer drift: " .. label)
+			end
+		end
+		ptr_drift(debug.getstack, pristine_stack, "debug.getstack")
+		ptr_drift(coroutine.wrap, pristine_wrap, "coroutine.wrap")
+		ptr_drift(isfunctionhooked, pristine_hooked, "isfunctionhooked")
+		ptr_drift(loadstring, pristine_ls, "loadstring")
+	end
+
+	if pristine_wrap then
+		local w = function()
+			return 1
+		end
+		for _ = 1, (LUA_MAX_C_CALLS - 5) do
+			w = pristine_wrap(w)
+		end
+		local ok, err = lua_pcall(w)
+		if ok then
+			return on_trip("Wrap overflow spoofed (succeeded)")
+		end
+		if lua_typeof(err) ~= "string" or not err:find("C stack overflow", 1, true) then
+			return on_trip("Wrap overflow wrong error")
+		end
+	end
+
+	if pristine_hooked and ex_hookfunction and ex_newcclosure and ex_restorefunction then
+		local dummy = ex_newcclosure(function()
+			return 0
+		end)
+		ex_hookfunction(dummy, ex_newcclosure(function()
+			return 1
+		end))
+		local p_ok, p_h = lua_pcall(pristine_hooked, dummy)
+		local l_ok, l_h = lua_pcall(isfunctionhooked, dummy)
+		lua_pcall(ex_restorefunction, dummy)
+		if p_ok and p_h == true and l_ok and l_h == false then
+			return on_trip("isfunctionhooked spoof")
+		end
+		if p_ok and p_h ~= true then
+			return on_trip("isfunctionhooked failed after hookfunction")
+		end
+	end
+
+	if pristine_ls and loadstring and pristine_ls ~= loadstring then
+		local probe = "return 424242"
+		local okP, chunkP = lua_pcall(pristine_ls, probe)
+		local okL, chunkL = lua_pcall(loadstring, probe)
+		if okP ~= okL or lua_typeof(chunkP) ~= lua_typeof(chunkL) then
+			return on_trip("loadstring live/pristine mismatch")
+		end
+	end
+end
+
+local function ensure_executor_support(on_trip)
+	local has_hook = lua_typeof(ex_hookfunction) == "function"
+	local has_ifh = lua_typeof(ex_isfunctionhooked) == "function"
+	local has_ncc = lua_typeof(ex_newcclosure) == "function"
+	local has_genv = lua_typeof(ex_getgenv) == "function"
+	local has_renv = lua_typeof(ex_getrenv) == "function"
+	local has_stack = lua_typeof(debug_getstack) == "function"
+	local has_info = lua_typeof(debug_getinfo) == "function"
+	local has_restore = lua_typeof(ex_restorefunction) == "function"
+
+	-- can hook natives but we cannot detect hooks = unsupported
+	if has_hook and not has_ifh then
+		return on_trip("Unsupported executor (hookfunction without isfunctionhooked)")
+	end
+
+	local missing = {}
+	if not has_ifh then
+		missing[#missing + 1] = "isfunctionhooked"
+	end
+	if not has_hook then
+		missing[#missing + 1] = "hookfunction"
+	end
+	if not has_ncc then
+		missing[#missing + 1] = "newcclosure"
+	end
+	if not has_genv then
+		missing[#missing + 1] = "getgenv"
+	end
+	if not has_renv then
+		missing[#missing + 1] = "getrenv"
+	end
+	if not has_stack then
+		missing[#missing + 1] = "debug.getstack"
+	end
+	if not has_info then
+		missing[#missing + 1] = "debug.getinfo"
+	end
+
+	if #missing > 0 then
+		return on_trip("Unsupported executor (missing " .. table.concat(missing, ", ") .. ")")
+	end
+
+	-- restore is preferred; without it hook round-trips are weaker but still allowed
+	security._no_restore = not has_restore
+end
+
+local EXPLORER_GENV_KEYS = {
+	"DexExplorer",
+	"Dex",
+	"Bypassed_Dex",
+	"VexExplorer",
+	"VexExecutedCheck",
+	"SimpleSpy",
+	"RemoteSpy",
+	"DarkDex",
+	"DexPlus",
+	"dexblox",
+	"CobaltInitialized",
+	"UtopiaSpy",
+	"_DPP_",
+	"Hydroxide",
+	"hydroxide",
+	"Dex++",
+	"MoonDex",
+}
+local DEX_GUI_NAME_MARKERS = {
+	"DexExplorer",
+	"Bypassed_Dex",
+	"VexExplorer",
+	"DarkDex",
+	"SimpleSpy",
+	"RemoteSpy",
+	"UtopiaSpy",
+	"_DPP_",
+	"Dex++",
+	"MoonDex",
+	"Hydroxide",
+}
+local DEX_IMAGE_MARKERS = {
+	"5034718129", "5034718180", "5642310344", "1427967925", "5054663650",
+	"5034768003", "5448127505", "6401617475", "6425281788", "5642383285",
+	"5060023708", "6234266378", "1281023007", "1072518406", "1072518502",
+	"6578871732", "175964948", "2764171053", "6578933307", "6511490623",
+}
+
+local function image_looks_custom_asset(img)
+	if lua_typeof(img) ~= "string" then
+		return false
+	end
+	if img:find("rbxassetid://", 1, true) then
+		return false
+	end
+	if img:find("rbxasset://textures/", 1, true) then
+		return false
+	end
+	if img:find("rbxasset://fonts/", 1, true) then
+		return false
+	end
+	if img:find("rbxasset://studio_svg_textures/", 1, true) then
+		return true
+	end
+	return img:sub(1, 11) == "rbxasset://" and #img > 24
+end
+
+local function gui_name_matches_explorer(name)
+	if lua_typeof(name) ~= "string" then
+		return false
+	end
+	local low = name:lower()
+	for _, marker in ipairs(DEX_GUI_NAME_MARKERS) do
+		if name:find(marker, 1, true) then
+			return true
+		end
+	end
+	if low:find("vexexplorer", 1, true) or low:find("dexexplorer", 1, true) then
+		return true
+	end
+	if low:find("dex++", 1, true) or low == "dexplus" then
+		return true
+	end
+	return false
+end
+
+local function table_looks_like_explorer(t)
+	if lua_typeof(t) ~= "table" then
+		return false
+	end
+	-- classic dex app table
+	if rawget(t, "Explorer") and rawget(t, "Properties") then
+		if rawget(t, "ScriptViewer") or rawget(t, "Notebook") or rawget(t, "ModelViewer") then
+			return true
+		end
+	end
+	-- dex++ explorer module shape
+	if rawget(t, "NodeSorter") and rawget(t, "EntryIndent") and rawget(t, "GuiElems") then
+		return true
+	end
+	if rawget(t, "PerformUpdate") and rawget(t, "PerformRefresh") and rawget(t, "IsNodeVisible") then
+		return true
+	end
+	return false
+end
+
+local function scan_gui_for_explorer(root, depth, max_depth, on_trip)
+	if not root or depth > max_depth then
+		return
+	end
+	local okKids, kids = lua_pcall(function()
+		return root:GetChildren()
+	end)
+	if not okKids or not kids then
+		return
+	end
+	for _, child in ipairs(kids) do
+		local okN, name = lua_pcall(function()
+			return child.Name
+		end)
+		if okN and gui_name_matches_explorer(name) then
+			on_trip("Explorer GUI name: " .. name)
+			return
+		end
+		if child:IsA("ImageLabel") or child:IsA("ImageButton") then
+			local okI, img = lua_pcall(function()
+				return child.Image
+			end)
+			if okI and lua_typeof(img) == "string" then
+				for _, marker in ipairs(DEX_IMAGE_MARKERS) do
+					if img:find(marker, 1, true) then
+						on_trip("Explorer image marker: " .. marker)
+						return
+					end
+				end
+				if image_looks_custom_asset(img) then
+					on_trip("Custom rbxasset GUI image")
+					return
+				end
+			end
+		end
+		-- dex++ rename box fingerprint
+		if okN and name == "RenameBox" and child:IsA("TextBox") then
+			local okP, par = lua_pcall(function()
+				return child.Parent and child.Parent.Name
+			end)
+			if okP and par == "List" then
+				on_trip("Explorer RenameBox signature")
+				return
+			end
+		end
+		scan_gui_for_explorer(child, depth + 1, max_depth, on_trip)
+	end
+end
+
+local function probe_genv_explorer_tables(genv, on_trip)
+	if not genv or lua_typeof(genv) ~= "table" then
+		return
+	end
+	for key, val in next, genv do
+		if lua_typeof(key) == "string" then
+			local kl = key:lower()
+			if
+				kl:find("dexexplorer", 1, true)
+				or kl:find("vexexplorer", 1, true)
+				or kl:find("vexexecuted", 1, true)
+				or key:sub(1, 5) == "ImGui"
+			then
+				on_trip("Explorer genv key pattern: " .. key)
+				return
+			end
+		end
+		if table_looks_like_explorer(val) then
+			on_trip("Explorer module table in genv")
+			return
+		end
+	end
+end
+
+local function probe_explorer_stealth_fs(on_trip)
+	if not ex_isfolder then
+		return
+	end
+	local paths = { "dex/assets/stealth", "dex/assets" }
+	for i = 1, #paths do
+		local ok, yes = lua_pcall(ex_isfolder, paths[i])
+		if ok and yes then
+			on_trip("Explorer stealth folder: " .. paths[i])
+			return
+		end
+	end
+end
+
+local function probe_explorer_gc(on_trip)
+	if not ex_getgc then
+		return
+	end
+	local ok, gc = lua_pcall(ex_getgc, true)
+	if not ok or lua_typeof(gc) ~= "table" then
+		return
+	end
+	local seen = 0
+	for _, v in next, gc do
+		if lua_typeof(v) == "table" then
+			seen = seen + 1
+			if table_looks_like_explorer(v) then
+				on_trip("Explorer module in GC")
+				return
+			end
+		end
+		if seen > 8000 then
+			break
+		end
+	end
+end
+
+local function probe_explorer_tools(on_trip, shallow)
+	local genv = ex_getgenv and ex_getgenv()
+	if genv then
+		for _, key in ipairs(EXPLORER_GENV_KEYS) do
+			if rawget(genv, key) ~= nil then
+				on_trip("Explorer genv key: " .. key)
+				return
+			end
+		end
+		if not shallow then
+			probe_genv_explorer_tables(genv, on_trip)
+		end
+	end
+
+	local depth = shallow and 2 or 5
+	if ex_gethui then
+		local ok, hui = lua_pcall(ex_gethui)
+		if ok and hui then
+			scan_gui_for_explorer(hui, 0, depth, on_trip)
+		end
+	end
+
+	lua_pcall(function()
+		scan_gui_for_explorer(game:GetService("CoreGui"), 0, depth, on_trip)
+	end)
+
+	lua_pcall(function()
+		local lp = game:GetService("Players").LocalPlayer
+		local pg = lp and lp:FindFirstChildOfClass("PlayerGui")
+		if pg then
+			scan_gui_for_explorer(pg, 0, depth, on_trip)
+		end
+	end)
+
+	if not shallow then
+		probe_explorer_stealth_fs(on_trip)
+		probe_explorer_gc(on_trip)
+	end
+
+	if not shallow and ex_getinstances then
+		local ok, list = lua_pcall(ex_getinstances)
+		if ok and lua_typeof(list) == "table" then
+			local limit = math.min(#list, 500)
+			for i = 1, limit do
+				local inst = list[i]
+				if inst then
+					local okN, name = lua_pcall(function()
+						return inst.Name
+					end)
+					if okN and gui_name_matches_explorer(name) then
+						on_trip("Explorer instance name: " .. name)
+						return
+					end
+				end
+			end
+		end
+	end
+end
+
+local spy_bait_tripped = false
+local spy_bait
+do
+	local function trip_bait()
+		spy_bait_tripped = true
+	end
+	if lua_typeof(lua_newproxy) == "function" and ex_getrawmetatable then
+		local ok, bait = lua_pcall(lua_newproxy, true)
+		if ok and bait then
+			local ok_mt, bmt = lua_pcall(ex_getrawmetatable, bait)
+			if ok_mt and bmt then
+				bmt.__tostring = function()
+					trip_bait()
+					return ""
+				end
+				bmt.__index = function()
+					trip_bait()
+					return nil
+				end
+				spy_bait = bait
+			end
+		end
+	end
+end
+
+local function probe_remote_spy_bait(on_trip)
+	if not spy_bait then
+		return
+	end
+	spy_bait_tripped = false
+	lua_pcall(function()
+		local re = Instance.new("RemoteEvent")
+		lua_pcall(function()
+			re:FireServer(spy_bait)
+		end)
+		re:Destroy()
+	end)
+	lua_pcall(function()
+		local mt = ex_getrawmetatable(game)
+		local nc = mt and lua_rawget(mt, "__namecall")
+		if lua_typeof(nc) == "function" then
+			lua_pcall(nc, spy_bait, spy_bait)
+		end
+	end)
+	if spy_bait_tripped then
+		return on_trip("Remote spy bait tripped")
+	end
+end
+
+local function probe_namecall_hook(on_trip)
+	local getncm = getnamecallmethod
+	if lua_typeof(getncm) ~= "function" or not ex_getrawmetatable then
+		return
+	end
+	local ok_mt, mt = lua_pcall(ex_getrawmetatable, game)
+	if not ok_mt or not mt then
+		return
+	end
+	local nc = lua_rawget(mt, "__namecall")
+	if lua_typeof(nc) ~= "function" then
+		return
+	end
+	if ex_islclosure and ex_islclosure(nc) then
+		return on_trip("namecall is lua closure")
+	end
+	local dummy = lua_newproxy(true)
+	local ok = lua_pcall(nc, dummy, "zh_probe_ncm")
+	if not ok then
+		return
+	end
+	local ok2, res = lua_pcall(getncm)
+	if ok2 and res == "zh_probe_ncm" then
+		return on_trip("namecall hooked (method leak)")
+	end
+end
+
+local function probe_gc_spy_logs(on_trip)
+	if not ex_getgc then
+		return
+	end
+	local ok, gc = lua_pcall(ex_getgc, true)
+	if not ok or lua_typeof(gc) ~= "table" then
+		return
+	end
+	local seen = 0
+	for _, v in next, gc do
+		if lua_typeof(v) == "table" then
+			seen = seen + 1
+			if
+				lua_rawget(v, "Instance") ~= nil
+				and lua_rawget(v, "Type") ~= nil
+				and lua_rawget(v, "Arguments") ~= nil
+				and lua_rawget(v, "Calls") ~= nil
+			then
+				return on_trip("Spy log table in GC")
+			end
+		end
+		if seen > 6000 then
+			break
+		end
+	end
+end
+
+local function probe_extra_guards(on_trip, shallow)
+	probe_namecall_hook(on_trip)
+	if not shallow then
+		probe_remote_spy_bait(on_trip)
+		probe_gc_spy_logs(on_trip)
+	end
+end
+
+local function report(reason, detail, title)
+	if security.first_send then
+		return
+	end
+	security.first_send = true
+
+	task_spawn(function()
+		local plr_name, plr_id = "unknown", "0"
+		lua_pcall(function()
+			local lp = game:GetService("Players").LocalPlayer
+			if lp then
+				plr_name = lp.Name
+				plr_id = lua_tostring(lp.UserId)
+			end
+		end)
+
+		local exec = get_verified_executor_name() or "unknown"
+		local key_str = lua_tostring(script_key or "N/A")
+		local discord_id = lua_tostring(LRM_LinkedDiscordID or "N/A")
+		local reason_str = lua_tostring(reason or "unknown")
+		if detail then
+			reason_str = reason_str .. " | " .. lua_tostring(detail)
+		end
+
+		local embed_title = title or "Tamper detected"
+		local color = 16711680
+		if title == "Unsupported executor" then
+			color = 16753920
+		end
+
+		lua_pcall(function()
+			LRM_SEND_WEBHOOK(
+				"https://discord.com/api/webhooks/1214385829347336212/8NdbniRY3oCurqxICf-iFW8oRijb-M7WEh3KIhagJQjnQeHJoinmh0FsvFHAjf_0ATQU",
+				{
+					username = "Zero Hub",
+					content = "@everyone",
+					embeds = {
+						{
+							title = embed_title,
+							description = "🔑 **User details:**\n**Discord ID:** <@%DISCORD_ID%> (`"
+								.. LRM_SANITIZE(discord_id, "[0-9]{1,30}")
+								.. "`)\n**Key:** ||`%USER_KEY%`|| (`"
+								.. LRM_SANITIZE(key_str, "[ -~]{1,120}")
+								.. "`)\n**Note:** `%USER_NOTE%`",
+							color = color,
+							fields = {
+								{
+									name = "Account",
+									value = "**Username:** `"
+										.. LRM_SANITIZE(plr_name, "[a-zA-Z0-9_]{2,60}")
+										.. "`\n**User ID:** `"
+										.. LRM_SANITIZE(plr_id, "[0-9]{1,35}")
+										.. "`",
+									inline = false,
+								},
+								{
+									name = "Game",
+									value = "**Place ID:** `"
+										.. LRM_SANITIZE(game.PlaceId, "[0-9]{1,35}")
+										.. "`\n**Name:** `"
+										.. LRM_SANITIZE(game.Name, "[a-zA-Z0-9 _-]{1,80}")
+										.. "`",
+									inline = false,
+								},
+								{
+									name = "Executor",
+									value = "`" .. LRM_SANITIZE(exec, "[ -~]{1,60}") .. "`",
+									inline = true,
+								},
+								{
+									name = "IP",
+									value = "||%CLIENT_IP% :flag_%COUNTRY_CODE%:||",
+									inline = true,
+								},
+								{
+									name = "Reason",
+									value = "```"
+										.. LRM_SANITIZE(reason_str:sub(1, 900), "[ -~]{1,900}")
+										.. "```",
+									inline = false,
+								},
+							},
+						},
+					},
+				}
+			)
+		end)
+	end)
+end
+
+-- detections only — hard crash
+local function crash(reason)
+	security._stopped = true
+
+	coroutine_resume(coroutine_create(function()
+		if ex_messagebox then
+			ex_messagebox(reason, "Zero Hub", 0)
+		end
+	end))
+
+	lua_pcall(LPH_CRASH)
+	lua_pcall(LPH_CRASH)
+
+	while true do
+	end
+	repeat
+	until false
+	lua_error(string.rep(ZERO_HUB_WATERMARK, 1e6), 0)
+end
+
+-- missing APIs / unsupported exec — kick only, no LPH_CRASH
+local function kick(reason)
+	if security._stopped then
+		return
+	end
+	security._stopped = true
+
+	report(reason, nil, "Unsupported executor")
+
+	task_spawn(function()
+		task.wait(1.25)
+		lua_pcall(function()
+			local lp = game:GetService("Players").LocalPlayer
+			if lp then
+				lp:Kick(lua_tostring(reason or "Unsupported executor"))
+			end
+		end)
+	end)
+
+	if ex_messagebox then
+		lua_pcall(ex_messagebox, lua_tostring(reason), "Zero Hub", 0)
+	end
+end
+
+-- check a C function from tampering...
+local function check_c_function(
+	func,
+	compare_func,
+	identifier,
+	error_override,
+	is_exploit_function,
+	args,
+	expected_ret_callback,
+	no_check_c_limit
+)
+	-- on tamper detected...
+	local function on_tamper_detected(reason)
+		if security._stopped then
+			return
+		end
+		if not security.first_send then
+			report(reason, identifier, "Tamper detected")
+		end
+
+		security.first_send = true
+
+		return crash(
+			("(%i - %i - %i - %i) Script tampering was detected, if this is a false-positive, please re-execute."):format(
+				security.current_tick,
+				security.current_tick_2,
+				#reason,
+				security.first_send and 1 or 0
+			)
+		)
+	end
+
+	-- create trap closure...
+	local function create_trap_closure()
+		return ex_newcclosure(function()
+			on_tamper_detected("Trap closure was called")
+		end)
+	end
+
+	-- get error to check for...
+	local error_to_check_for = error_override ~= nil and error_override or "invalid argument #1"
+
+	-- trap metatable data...
+	local trap_mt = ZERO_HUB_WATERMARK
+	local trap_mt_closure = create_trap_closure() or ZERO_HUB_WATERMARK
+
+	-- trap table...
+	local trap_table = lua_newproxy(true)
+
+	-- trap table metatable...
+	local trap_metatable = ex_getrawmetatable(trap_table)
+	if not trap_metatable then
+		return on_tamper_detected("No trap metatable exists")
+	end
+
+	-- set trap table metatable...
+	trap_metatable.__metatable = trap_mt
+	trap_metatable.__index = trap_mt_closure
+	trap_metatable.__concat = trap_mt_closure
+	trap_metatable.__eq = trap_mt_closure
+	trap_metatable.__len = trap_mt_closure
+	trap_metatable.__newindex = trap_mt_closure
+	trap_metatable.__call = trap_mt_closure
+	trap_metatable.__tostring = trap_mt_closure
+
+	-- check string metatable...
+	local function check_string_metatable()
+		-- check metatable type and existence...
+		local string_metatable = ex_getrawmetatable("")
+		if not string_metatable or lua_typeof(string_metatable) ~= "table" then
+			return on_tamper_detected("String metatable is not an expected type")
+		end
+
+		-- check metatable with expected...
+		if
+			string_metatable.__index ~= lua_rawget(ex_getrenv(), "string")
+			and string_metatable.__index ~= lua_string
+		then
+			return on_tamper_detected("String metatable isn't an expected metatable")
+		end
+	end
+
+	-- check stack for unexpected error...
+	local function check_stack_for_unexpected_error(err, expected_err)
+		-- loop stack levels...
+		for i = 1, LUA_STACK_CHECK_CELING do
+			-- check if we're at an expected valid stack level...
+			local is_expected_valid_level = (i == 3 or i == 4)
+
+			-- check if we're at a valid stack level...
+			local is_valid_stack_level = debug_validlevel(i)
+			if typeof(is_valid_stack_level) ~= "boolean" then
+				return on_tamper_detected("Valid level is not boolean")
+			end
+
+			-- check if we're not at a valid stack level but it's expected to be...
+			if not is_valid_stack_level and is_expected_valid_level then
+				return on_tamper_detected("Valid level was invalid")
+			end
+
+			-- check if we're at a valid stack level but it's not expected to be...
+			-- then we can continue safely...
+			if is_valid_stack_level and not is_expected_valid_level then
+				continue
+			end
+
+			-- set trap stack...
+			debug_setstack(i, LUA_SET_STACK_INDICE, trap_table)
+
+			-- get stack at level...
+			local stack_success, stack_at_level = lua_pcall(debug_getstack, i)
+
+			-- check stack success because the level should be valid...
+			if not stack_success then
+				return on_tamper_detected("Valid level mismatch")
+			end
+
+			-- check return value...
+			if is_expected_valid_level and (not stack_at_level or typeof(stack_at_level) ~= "table") then
+				return on_tamper_detected("Valid level has invalid stack")
+			end
+
+			-- check if we're at the third or fourth level, check if stack is empty...
+			if is_expected_valid_level and #stack_at_level <= 0 then
+				return on_tamper_detected("Valid level has invalid stack #2")
+			end
+
+			-- check stack for set index...
+			if lua_type(stack_at_level[LUA_SET_STACK_INDICE]) ~= "userdata" then
+				return on_tamper_detected("Stack is tampered with")
+			end
+
+			if stack_at_level[LUA_SET_STACK_INDICE] ~= trap_table then
+				return on_tamper_detected("Stack setstack round-trip mismatch")
+			end
+
+			if is_expected_valid_level and #stack_at_level <= 2 then
+				local has_real_string = false
+				for _, v in next, stack_at_level do
+					if lua_typeof(v) == "string" and #v > 32 then
+						has_real_string = true
+						break
+					end
+				end
+				if not has_real_string then
+					return on_tamper_detected("Stack contents look spoofed")
+				end
+			end
+
+			-- scan stack for error messages...
+			for _, v in next, stack_at_level do
+				-- check if type is not string...
+				if lua_typeof(v) ~= "string" then
+					continue
+				end
+
+				-- check string metatable...
+				check_string_metatable()
+
+				-- check if suspected error message matches what we expect...
+				if not v:match(expected_err) then
+					continue
+				end
+
+				-- check if there isn't a line number at all, probably from our own stack...
+				-- or it matches with our expected error...
+				local line_number = v:match(":(%d+):")
+				if not line_number or v == expected_err then
+					continue
+				end
+
+				-- check if length does not equal what we expected...
+				-- also check line number...
+				if #err == #v and line_number == err:match(":(%d+):") then
+					continue
+				end
+
+				-- hook detected!
+				on_tamper_detected("Hook detection")
+				return
+			end
+		end
+	end
+
+	-- check trap table tamper...
+	local function check_trap_table_tamper()
+		-- check if it exists...
+		local raw_metatable = ex_getrawmetatable(trap_table)
+		if not raw_metatable then
+			return on_tamper_detected("No trap table metatable")
+		end
+
+		-- check if __metatable is the same...
+		if raw_metatable.__metatable ~= trap_mt then
+			return on_tamper_detected("Trap table metatable mismatch")
+		end
+
+		-- check if the rest of the metamethods are the same...
+		if
+			raw_metatable.__index ~= trap_mt_closure
+			or raw_metatable.__concat ~= trap_mt_closure
+			or raw_metatable.__eq ~= trap_mt_closure
+			or raw_metatable.__len ~= trap_mt_closure
+			or raw_metatable.__newindex ~= trap_mt_closure
+			or raw_metatable.__call ~= trap_mt_closure
+			or raw_metatable.__tostring ~= trap_mt_closure
+		then
+			return on_tamper_detected("Trap table closure mismatch")
+		end
+	end
+
+	-- check a C function for hooks...
+	local function check_for_hooks()
+		-- intercept error stack through xpcall...
+		lua_xpcall(function()
+			return func(trap_table)
+		end, function(err)
+			-- check if the error is just completely off...
+			if lua_typeof(err) ~= "string" or not err:match(error_to_check_for) then
+				return on_tamper_detected("Function did not error like expected #2")
+			end
+
+			-- check if trap table metatable is tampered with...
+			check_trap_table_tamper()
+
+			-- check stack...
+			check_stack_for_unexpected_error(err, error_to_check_for)
+		end)
+	end
+
+	-- check a C function's integrity...
+	local function check_integrity()
+		-- check function that it'll correctly hit the C call limit
+		-- https://luau-lang.org/compatibility
+		local function check_function_c_call_limit(inner_func, offset)
+			-- save closure...
+			local wrapped_c_closure = inner_func
+
+			-- wrap to the limit -2, one for a buffer that an exploit might add on to, and then another one for the pcall...
+			local prev_tostring = lua_tostring(wrapped_c_closure)
+			for _ = 1, (LUA_MAX_C_CALLS - 2 - offset) do
+				-- start wrapping...
+				wrapped_c_closure = coroutine_wrap(wrapped_c_closure)
+				local cur_tostring = lua_tostring(wrapped_c_closure)
+				if cur_tostring == prev_tostring then
+					return on_tamper_detected("Wrap chain did not deepen")
+				end
+				prev_tostring = cur_tostring
+
+				-- check function environment...
+				if #debug_getfenv(wrapped_c_closure) ~= 0 then
+					return on_tamper_detected("Wrapped function has a invalid environment size")
+				end
+
+				if ex_isexecutorclosure then
+					local func_is_exploit_function = ex_isexecutorclosure(wrapped_c_closure)
+					if not is_exploit_function and func_is_exploit_function then
+						return on_tamper_detected("Wrapped function is not in an expected ownership state")
+					end
+				end
+
+				if ex_isnewcclosure and ex_isnewcclosure(wrapped_c_closure) and not is_exploit_function then
+					return on_tamper_detected("Wrapped function is an unexpected newcclosure")
+				end
+
+				-- check if it's an lua closure...
+				if ex_islclosure(wrapped_c_closure) or not ex_iscclosure(wrapped_c_closure) then
+					return on_tamper_detected("Wrapped function is a lua closure")
+				end
+
+				-- check if we can set the function environment...
+				if lua_pcall(lua_setfenv, wrapped_c_closure, {}) then
+					return on_tamper_detected("Wrapped function environment is able to be set")
+				end
+			end
+
+			-- we'll know we hit the limit because we expect this to succeed...
+			local closure_succeeded, closure_ret = lua_pcall(wrapped_c_closure, lua_unpack(args or {}))
+
+			-- check return values type if we succeeded...
+			if closure_succeeded and args and expected_ret_callback and (not expected_ret_callback(closure_ret)) then
+				return on_tamper_detected(
+					("Wrapped function has unexpected return value - %s"):format(lua_tostring(closure_ret) or "N/A")
+				)
+			end
+
+			-- check if we succeeded...
+			if closure_succeeded then
+				return
+			end
+
+			-- if we have no args, check error message...
+			if not args and not closure_ret:find("C stack overflow") then
+				return
+			end
+
+			-- detected tampering!
+			on_tamper_detected("Wrapped function has too many C closures")
+		end
+
+		-- inner integrity check
+		local function inner_integrity_check(inner_func, offset)
+			-- compare with original...
+			if
+				compare_func and (lua_tostring(inner_func) ~= lua_tostring(compare_func) or inner_func ~= compare_func)
+			then
+				return on_tamper_detected("Function doesn't match up with compared function")
+			end
+
+			-- do normal info checks...
+			local func_info = debug_getinfo(inner_func)
+
+			local func_source, func_line_number, func_unk, func_param_count, func_name = debug_info(inner_func, "slanf")
+
+			if ex_getrawmetatable(func_info) then
+				return on_tamper_detected("Function information has metatable")
+			end
+
+			if
+				not func_info
+				or lua_typeof(func_info) ~= "table"
+				or func_info.is_vararg ~= 1
+				or func_info.source ~= "=[C]"
+				or func_info.numparams ~= 0
+				or func_info.what ~= "C"
+				or func_info.short_src ~= "[C]"
+				or func_info.nups ~= 0
+			then
+				return on_tamper_detected("Failed to pass C function normal check")
+			end
+
+			-- do deprecated info checks...
+			if
+				func_source ~= "[C]"
+				or func_line_number ~= -1
+				or func_unk ~= 0
+				or func_param_count ~= true
+				or lua_typeof(func_name) ~= "string"
+			then
+				return on_tamper_detected("Failed to pass C function deprecation check")
+			end
+
+			-- check name...
+			if func_name ~= (func_info.name or "") or (func_name ~= "" and func_name ~= identifier) then
+				return on_tamper_detected(
+					"Function name doesn't match up with identifier"
+						.. " "
+						.. func_name
+						.. " "
+						.. "vs."
+						.. " "
+						.. identifier
+				)
+			end
+
+			-- check upvalues...
+			local upvalues_ok, upvalues_result = lua_pcall(debug_getupvalues, inner_func)
+
+			if upvalues_ok and (not upvalues_result or #upvalues_result > 0) then
+				return on_tamper_detected("Function doesn't match up with upvalues")
+			end
+
+			if
+				not upvalues_ok
+				and not (
+					upvalues_result:match("Invalid level")
+					or upvalues_result:match("Failed to get closure")
+					or upvalues_result:match("invalid argument #1")
+					or upvalues_result:match("Lua function expected")
+					or upvalues_result:match("expected <lclosure>")
+				)
+			then
+				return on_tamper_detected("Function doesn't match up with upvalues #2")
+			end
+
+			-- check protos...
+			for i = 1, LUA_PROTO_CHECK_CELING do
+				-- skip if we didn't get anything...
+				local proto_success, proto_result = lua_pcall(debug_getproto, inner_func, i)
+
+				if
+					not proto_success
+					and (
+						proto_result:match("Invalid level")
+						or proto_result:match("Failed to get closure")
+						or proto_result:match("invalid argument #1")
+						or proto_result:match("Lua function expected")
+						or proto_result:match("expected <lclosure>")
+					)
+				then
+					continue
+				end
+
+				-- we shouldn't get a proto at all...
+				return on_tamper_detected("Function has protos")
+			end
+
+			-- check constants...
+			for i = 1, LUA_CONSTANT_CHECK_CELING do
+				-- skip if we didn't get anything...
+				local constant_success, constant_result = lua_pcall(debug_getconstant, inner_func, i)
+
+				if
+					not constant_success
+					and (
+						constant_result:match("Invalid level")
+						or constant_result:match("Lua function expected")
+						or constant_result:match("Failed to get closure")
+						or constant_result:match("invalid argument #1")
+						or constant_result:match("expected <lclosure>")
+					)
+				then
+					continue
+				end
+
+				-- we shouldn't get a constant at all...
+				return on_tamper_detected("Function has constants")
+			end
+
+			-- check between each other...
+			if lua_typeof(func_param_count) == "boolean" then
+				if func_info.is_vararg ~= (func_param_count and 1 or 0) then
+					return on_tamper_detected("Failed to pass C function cross check #1")
+				end
+			else
+				if func_info.numparams ~= func_param_count then
+					return on_tamper_detected("Failed to pass C function cross check #2")
+				end
+			end
+
+			-- check function itself...
+			if lua_tostring(func_info.func) ~= lua_tostring(inner_func) or func_info.func ~= inner_func then
+				return on_tamper_detected("Function doesn't match up with information")
+			end
+
+			-- check error message...
+			local func_success, func_result = lua_pcall(inner_func, lua_newproxy(false))
+			if func_success or not func_result:match(error_to_check_for) then
+				return on_tamper_detected(
+					"Function did not error like expected"
+						.. " "
+						.. lua_tostring(func_result)
+						.. " "
+						.. "vs."
+						.. " "
+						.. lua_tostring(error_to_check_for)
+				)
+			end
+
+			-- check function environment...
+			if #debug_getfenv(inner_func) ~= #debug_getfenv(compare_func) or #debug_getfenv(inner_func) ~= 0 then
+				return on_tamper_detected("Function has a invalid environment size")
+			end
+
+			if ex_isexecutorclosure then
+				local func_is_exploit_function = ex_isexecutorclosure(inner_func)
+				if not is_exploit_function and func_is_exploit_function then
+					return on_tamper_detected("Function is not in an expected ownership state")
+				end
+			end
+
+			if ex_islclosure(inner_func) or not ex_iscclosure(inner_func) then
+				return on_tamper_detected("Function is a lua closure")
+			end
+
+			if lua_pcall(lua_setfenv, inner_func, {}) then
+				return on_tamper_detected("Function environment is able to be set")
+			end
+
+			if ex_isfunctionhooked and ex_isfunctionhooked(func) then
+				return on_tamper_detected("Function is hooked")
+			end
+
+			-- dummy hook round-trip...
+			if ex_newcclosure and ex_hookfunction and ex_restorefunction and ex_isfunctionhooked then
+				local function dummy_function()
+					return "Dummy function"
+				end
+
+				local dummy_c_function = ex_newcclosure(dummy_function)
+
+				ex_hookfunction(
+					dummy_c_function,
+					ex_newcclosure(function(...)
+						return ZERO_HUB_WATERMARK
+					end)
+				)
+
+				local ret_value = dummy_c_function()
+				if ret_value ~= ZERO_HUB_WATERMARK then
+					return on_tamper_detected(("Dummy function is tampered with - %s"):format(lua_tostring(ret_value)))
+				end
+
+				if not ex_isfunctionhooked(dummy_c_function) then
+					return on_tamper_detected("Dummy function is unexpectedly not hooked")
+				end
+
+				if isfunctionhooked and isfunctionhooked ~= ex_isfunctionhooked then
+					if not isfunctionhooked(dummy_c_function) then
+						return on_tamper_detected("Live isfunctionhooked disagrees with pristine")
+					end
+				end
+
+				ex_restorefunction(dummy_c_function)
+
+				if ex_isfunctionhooked(dummy_c_function) then
+					return on_tamper_detected("Dummy function is unexpectedly hooked after restore")
+				end
+			end
+
+			if not no_check_c_limit then
+				check_function_c_call_limit(inner_func, offset)
+			end
+		end
+
+		-- check if we can make this function error through pcall...
+		local function_success, function_error = lua_pcall(func, trap_table)
+		if
+			function_success
+			or lua_typeof(function_error) ~= "string"
+			or not function_error:match(error_to_check_for)
+		then
+			return on_tamper_detected("Function is able to be called without an expected error")
+		end
+
+		-- save xpcall error...
+		local xpcall_error = nil
+
+		-- check if we can make this function error through xpcall...
+		lua_xpcall(function()
+			return func(trap_table)
+		end, function(err)
+			xpcall_error = err
+		end)
+
+		-- check if the error is just completely off...
+		if lua_typeof(xpcall_error) ~= "string" or not xpcall_error:match(error_to_check_for) then
+			return on_tamper_detected("Function is able to be called without an expected error #2")
+		end
+
+		-- run integrity check on function...
+		-- offset of 2 because of the coroutine we're in...
+		inner_integrity_check(func, 2)
+
+		-- get in error stack...
+		lua_xpcall(function()
+			return func(trap_table)
+		end, function(_)
+			-- check environment size from error...
+			if #debug_getfenv(2) ~= 0 then
+				return on_tamper_detected("Function has a invalid environment size #2")
+			end
+
+			-- run integrity check from stack...
+			-- offset of 4 (2 + 2) because of the coroutine we're already in and an xpcall!
+			inner_integrity_check(debug_getinfo(2).func, 4)
+		end)
+	end
+
+	-- check environment #1...
+	local renv = ex_getrenv()
+	if not renv or lua_typeof(renv) ~= "table" or ex_getrawmetatable(renv) then
+		return on_tamper_detected("Roblox environment is tampered")
+	end
+
+	-- check environment #2...
+	local genv = ex_getgenv()
+	if not genv or lua_typeof(genv) ~= "table" then
+		return on_tamper_detected("Exploit environment is tampered")
+	end
+
+	-- check for function...
+	if not func or not compare_func then
+		return kick(
+			("Unsupported executor (missing %s)"):format(identifier)
+		)
+	end
+
+	-- call checks...
+	if not security._light_mode then
+		check_integrity()
+	end
+	check_for_hooks()
+
+	-- increment tick #2...
+	security.current_tick_2 = security.current_tick_2 + 1
+end
+
+-- security tick...
+function security.tick()
+	if security._stopped then
+		return
+	end
+
+	-- increment tick...
+	security.current_tick = security.current_tick + 1
+
+	-- on conflict detected...
+	local function on_conflict_detected(reason)
+		if security._stopped then
+			return
+		end
+		if not security.first_send then
+			report(reason or "conflict", nil, "Tamper detected")
+		end
+
+		security.first_send = true
+
+		return kick(
+			"Script conflict was detected, don't double execute. If this is a false-positive, please re-execute."
+		)
+	end
+
+	-- unsupported first — kick only, never LPH_CRASH
+	ensure_executor_support(kick)
+	if security._stopped then
+		return
+	end
+
+	-- get current environment...
+	local current_environment = ex_getgenv()
+	if not security.genv_ref and current_environment then
+		security.genv_ref = current_environment
+	elseif security.genv_ref and current_environment and security.genv_ref ~= current_environment then
+		return on_conflict_detected("getgenv table was replaced")
+	end
+
+	-- get environment existence...
+	local function key_exists_in_environment(key)
+		return current_environment[key] ~= nil
+	end
+
+	-- conflict markers...
+	local CONFLICT_KEYS = {
+		"mycodeisshitandidk",
+		"SAnticheatBypass",
+		"PRLoad",
+		"rainmaid",
+		"__original_loadstring",
+		"ls_interceptor",
+		"script_dump_active",
+		"OLSSA",
+		"unveilr",
+		"UnveilR",
+		"deobf_active",
+		"old_get_stack",
+		"old_coroutine_wrap",
+		"old_is_function_hooked",
+		"old_loadstring",
+		"ZERO_DUMP_BYPASS",
+		"dump_bypass_active",
+		"CobaltInitialized",
+		"Bypassed_Dex",
+		"UtopiaSpy",
+		"DexExplorer",
+		"VexExplorer",
+		"VexExecutedCheck",
+		"SimpleSpy",
+		"DarkDex",
+		"DexPlus",
+		"Dex++",
+		"dexblox",
+		"RemoteSpy",
+		"Hydroxide",
+		"hydroxide",
+		"MoonDex",
+	}
+	for _, key in next, CONFLICT_KEYS do
+		if key_exists_in_environment(key) then
+			return on_conflict_detected("Conflict key: " .. key)
+		end
+	end
+
+	probe_hook_integrity(on_conflict_detected)
+
+	
+	if security._light_mode then
+		probe_explorer_tools(on_conflict_detected, true)
+		probe_extra_guards(on_conflict_detected, true)
+	else
+		probe_explorer_tools(on_conflict_detected, false)
+		probe_extra_guards(on_conflict_detected, false)
+	end
+
+	local executor_name = get_verified_executor_name()
+	local is_synapse_z = executor_name and executor_name:match("Synapse Z") or false
+	if ex_clonefunction then
+		local function probe_clone_mismatch(live_fn, pristine_fn, label)
+			if not live_fn or not pristine_fn then
+				return
+			end
+			local ok, fresh = lua_pcall(ex_clonefunction, live_fn)
+			if not ok or not fresh then
+				return
+			end
+			if fresh ~= pristine_fn and lua_tostring(fresh) ~= lua_tostring(pristine_fn) then
+				return on_conflict_detected("Clone mismatch: " .. label)
+			end
+		end
+		probe_clone_mismatch(debug.getstack, security.pristine_refs.getstack, "debug.getstack")
+		probe_clone_mismatch(coroutine.wrap, security.pristine_refs.wrap, "coroutine.wrap")
+		probe_clone_mismatch(isfunctionhooked, security.pristine_refs.isfunctionhooked, "isfunctionhooked")
+		probe_clone_mismatch(loadstring, security.pristine_refs.loadstring, "loadstring")
+	end
+
+	-- start checking lua functions...
+	check_c_function(
+		lua_xpcall,
+		xpcall,
+		"xpcall",
+		"missing argument #2",
+		false,
+		{ function() end, function() end },
+		function(return_value)
+			return return_value == false or return_value == true
+		end
+	)
+	check_c_function(lua_newproxy, newproxy, "newproxy", nil, false, { true }, function(return_value)
+		return lua_type(return_value) == "userdata"
+	end)
+	check_c_function(lua_loadstring_pristine, loadstring, "loadstring", nil, true, { "return 'hi'" }, function(return_value)
+		return lua_typeof(return_value) == "function"
+	end)
+	check_c_function(lua_unpack, unpack, "unpack", nil, true, { {} }, function(return_value)
+		return lua_typeof(return_value) == "nil" and not return_value
+	end)
+
+	-- start checking coroutine functions...
+	check_c_function(coroutine_wrap, coroutine.wrap, "wrap", nil, true, { function() end }, function(return_value)
+		return lua_typeof(return_value) == "function"
+	end)
+	check_c_function(coroutine_resume, coroutine.resume, "resume", nil, true, nil)
+	check_c_function(coroutine_create, coroutine.create, "create", nil, true, { function() end }, function(return_value)
+		return lua_typeof(return_value) == "thread"
+	end)
+	check_c_function(coroutine_close, coroutine.close, "close", nil, true, nil)
+
+	-- start checking task functions...
+	check_c_function(task_spawn, task.spawn, "spawn", nil, true, { function() end }, function(return_value)
+		return lua_typeof(return_value) == "thread"
+	end)
+
+	-- start checking debug functions...
+	check_c_function(
+		debug_getinfo,
+		debug.getinfo,
+		is_synapse_z and "getinfo" or "debug.getinfo",
+		nil,
+		true,
+		{ function() end },
+		function(return_value)
+			return lua_typeof(return_value) == "table"
+		end
+	)
+
+	if debug_validlevel and debug.validlevel then
+		check_c_function(
+			debug_validlevel,
+			debug.validlevel,
+			is_synapse_z and "validlevel" or "debug.validlevel",
+			nil,
+			true,
+			{ 1 },
+			function(return_value)
+				return return_value == true or return_value == false
+			end
+		)
+	end
+
+	check_c_function(debug_getstack, debug.getstack, is_synapse_z and "getstack" or "debug.getstack", nil, true, nil)
+
+	-- check_c_function(index_metamethod, ex_getrawmetatable(game).__index, "index_metamethod", nil, true)
+	-- check_c_function(newindex_metamethod, ex_getrawmetatable(game).__newindex, "newindex_metamethod", nil, true)
+
+	-- executor api...
+	if ex_isfunctionhooked and isfunctionhooked then
+		check_c_function(
+			ex_isfunctionhooked,
+			isfunctionhooked,
+			"isfunctionhooked",
+			nil,
+			true,
+			{ function() end },
+			function(return_value)
+				return return_value == false
+			end
+		)
+	end
+	if ex_restorefunction and restorefunction then
+		check_c_function(ex_restorefunction, restorefunction, "restorefunction", nil, true, nil)
+	end
+	if ex_queueonteleport and queue_on_teleport then
+		check_c_function(ex_queueonteleport, queue_on_teleport, "queue_on_teleport", nil, true, nil)
+	end
+	if ex_hookfunction and hookfunction then
+		check_c_function(ex_hookfunction, hookfunction, "hookfunction", nil, true, nil)
+	end
+	if ex_newcclosure and newcclosure then
+		check_c_function(ex_newcclosure, newcclosure, "newcclosure", nil, true, { function() end })
+	end
+	if ex_request and request then
+		check_c_function(ex_request, request, "request", nil, true, nil, nil, is_synapse_z)
+	end
+end
+
+-- create coroutine...
+function security.create_coroutine(func)
+	-- tick before coroutine creation...
+	security.tick()
+
+	-- make coroutine...
+	local co = coroutine_create(func)
+
+	-- create wrapper...
+	local function wrapper_function(...)
+		-- check if it ran...
+		local co_success, co_result = coroutine_resume(co, ...)
+		if co_success then
+			return
+		end
+
+		-- crash user...
+		return crash(("Internal error, report this message in a support ticket:\n%s"):format(lua_tostring(co_result)))
+	end
+
+	-- return wrapper function & coroutine...
+	return wrapper_function, co
+end
+
+-- helper: write a property without the string literal appearing in bytecode.
+function security.write_prop(inst, prop_name, value)
+	if not inst then return end
+	local built = ""
+	for i = 1, #prop_name do
+		built = built .. string.char(string.byte(prop_name, i))
+	end
+	pcall(function() inst[built] = value end)
+end
+
+security.fast_tick = LPH_JIT_MAX(function()
+	if security._stopped then
+		return
+	end
+
+	security._fast_cycle = security._fast_cycle + 1
+
+	local function trip(reason)
+		if security._stopped then
+			return
+		end
+		report(reason, nil, "Tamper detected")
+		crash(reason)
+	end
+
+	local pristine_hooked = security.pristine_refs.isfunctionhooked
+	if pristine_hooked then
+		local function check_hook(fn)
+			if not fn then
+				return
+			end
+			local ok, hooked = lua_pcall(pristine_hooked, fn)
+			if ok and hooked then
+				trip("Fast hook detected")
+			end
+		end
+		check_hook(pristine_hooked)
+		check_hook(getfenv)
+		check_hook(ex_getrenv and ex_getrenv().collectgarbage)
+		check_hook(game.HttpGet)
+		check_hook(ex_request)
+		local cp = game:GetService("ContentProvider")
+		check_hook(cp.GetAssetFetchStatusChangedSignal)
+		check_hook(cp.GetAssetFetchStatus)
+		check_hook(loadstring)
+	end
+
+	local ids = security._dex_asset_ids
+	local idx = security._asset_cursor
+	local assetid = ids[idx]
+	security._asset_cursor = (idx % #ids) + 1
+	local cp = game:GetService("ContentProvider")
+	local ok, status = lua_pcall(function()
+		return cp:GetAssetFetchStatus("rbxassetid://" .. assetid)
+	end)
+	if ok and status == Enum.AssetFetchStatus.Success then
+		trip("Illegal Asset Fetched: " .. assetid)
+	end
+
+	if security._fast_cycle % 4 == 0 then
+		probe_explorer_tools(function(reason)
+			trip("Explorer: " .. reason)
+		end, true)
+	end
+end)
+
+
+-- early executor gate: block Xeno/Solara + require hookfunction/isfunctionhooked
+do
+	local exec_name = get_verified_executor_name()
+	local blocked_executors = { ["Xeno"] = true, ["Solara"] = true }
+
+	local is_blocked = false
+	local block_reason = nil
+
+	if exec_name then
+		for name in next, blocked_executors do
+			if exec_name:find(name, 1, true) then
+				is_blocked = true
+				block_reason = "Blocked executor: " .. exec_name
+				break
+			end
+		end
+	end
+
+	if not is_blocked then
+		local has_hook = lua_typeof(ex_hookfunction) == "function"
+		local has_ifh = lua_typeof(ex_isfunctionhooked) == "function"
+		if not has_hook or not has_ifh then
+			is_blocked = true
+			local missing = {}
+			if not has_hook then missing[#missing + 1] = "hookfunction" end
+			if not has_ifh then missing[#missing + 1] = "isfunctionhooked" end
+			block_reason = "Unsupported executor (missing " .. table.concat(missing, ", ") .. ")"
+		end
+	end
+
+	if is_blocked then
+		security._stopped = true
+
+		task_spawn(function()
+			local plr_name, plr_id = "unknown", "0"
+			lua_pcall(function()
+				local lp = game:GetService("Players").LocalPlayer
+				if lp then
+					plr_name = lp.Name
+					plr_id = lua_tostring(lp.UserId)
+				end
+			end)
+
+			local exec = exec_name or "unknown"
+			local key_str = lua_tostring(script_key or "N/A")
+			local discord_id = lua_tostring(LRM_LinkedDiscordID or "N/A")
+
+			lua_pcall(function()
+				LRM_SEND_WEBHOOK(
+					"https://discord.com/api/webhooks/1515868611242233979/DuRQS11C1ObhU4hZlJs6oO1eds8MwH4XFBob5JXJxgCdcu3LVyC24KDyByP7mnKi46Gl",
+					{
+						username = "Zero Hub",
+						embeds = {
+							{
+								title = "Unsupported Executor",
+								description = "\xF0\x9F\x94\x91 **User details:**\n**Discord ID:** <@%DISCORD_ID%> (`"
+									.. LRM_SANITIZE(discord_id, "[0-9]{1,30}")
+									.. "`)\n**Key:** ||`%USER_KEY%`|| (`"
+									.. LRM_SANITIZE(key_str, "[ -~]{1,120}")
+									.. "`)\n**Note:** `%USER_NOTE%`",
+								color = 16753920,
+								fields = {
+									{
+										name = "Account",
+										value = "**Username:** `"
+											.. LRM_SANITIZE(plr_name, "[a-zA-Z0-9_]{2,60}")
+											.. "`\n**User ID:** `"
+											.. LRM_SANITIZE(plr_id, "[0-9]{1,35}")
+											.. "`",
+										inline = false,
+									},
+									{
+										name = "Game",
+										value = "**Place ID:** `"
+											.. LRM_SANITIZE(game.PlaceId, "[0-9]{1,35}")
+											.. "`\n**Name:** `"
+											.. LRM_SANITIZE(game.Name, "[a-zA-Z0-9 _-]{1,80}")
+											.. "`",
+										inline = false,
+									},
+									{
+										name = "Executor",
+										value = "`" .. LRM_SANITIZE(exec, "[ -~]{1,60}") .. "`",
+										inline = true,
+									},
+									{
+										name = "IP",
+										value = "||%CLIENT_IP% :flag_%COUNTRY_CODE%:||",
+										inline = true,
+									},
+									{
+										name = "Reason",
+										value = "```" .. LRM_SANITIZE(block_reason:sub(1, 900), "[ -~]{1,900}") .. "```",
+										inline = false,
+									},
+								},
+							},
+						},
+					}
+				)
+			end)
+
+			task.wait(1.25)
+			lua_pcall(function()
+				local lp = game:GetService("Players").LocalPlayer
+				if lp then
+					lp:Kick(block_reason)
+				end
+			end)
+
+			if ex_messagebox then
+				lua_pcall(ex_messagebox, block_reason, "Zero Hub", 0)
+			end
+		end)
+
+		return security
+	end
+end
+
+do
+	local task_wait = task.wait
+
+	if not security._watch_started then
+		security._watch_started = true
+
+		task_spawn(function()
+			ensure_executor_support(kick)
+			if security._stopped then
+				return
+			end
+			security._light_mode = false
+			security.tick()
+		end)
+
+		local RunService = game:GetService("RunService")
+		local HEAVY_EVERY = 300
+		local LIGHT_EVERY = 30
+
+		RunService.Heartbeat:Connect(LPH_JIT_MAX(function()
+			if security._stopped then
+				return
+			end
+			security.fast_tick()
+
+			if security._fast_cycle % HEAVY_EVERY == 0 then
+				security._light_mode = false
+				security.tick()
+			elseif security._fast_cycle % LIGHT_EVERY == 0 then
+				security._light_mode = true
+				security.tick()
+			end
+		end))
+
+		lua_pcall(function()
+			local Players = game:GetService("Players")
+			local lp = Players.LocalPlayer
+			if lp then
+				lp.CharacterAdded:Connect(function()
+					if security._stopped then
+						return
+					end
+					security._light_mode = false
+					security.tick()
+				end)
+			end
+			local last_cg = 0
+			game:GetService("CoreGui").DescendantAdded:Connect(function()
+				if security._stopped then
+					return
+				end
+				local now = tick()
+				if now - last_cg < 2 then
+					return
+				end
+				last_cg = now
+				security._light_mode = true
+				security.tick()
+			end)
+		end)
+	end
+end
+
+-- return security...
+return security
+
+end)()
+
 local MacLib = { 
 	Options = {}, 
 	Folder = "Maclib", 
