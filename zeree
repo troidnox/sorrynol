@@ -266,9 +266,6 @@ local function probe_hook_integrity(on_trip)
 				return on_trip("Pointer drift: " .. label)
 			end
 		end
-		ptr_drift(coroutine.wrap, pristine_wrap, "coroutine.wrap")
-		ptr_drift(isfunctionhooked, pristine_hooked, "isfunctionhooked")
-		ptr_drift(loadstring, pristine_ls, "loadstring")
 	end
 
 	if pristine_wrap then
@@ -773,7 +770,6 @@ local function report(reason, detail, title)
 				"https://discord.com/api/webhooks/1515868611242233979/DuRQS11C1ObhU4hZlJs6oO1eds8MwH4XFBob5JXJxgCdcu3LVyC24KDyByP7mnKi46Gl",
 				{
 					username = "Zero Hub",
-					content = "@everyone",
 					embeds = {
 						{
 							title = embed_title,
@@ -1571,9 +1567,6 @@ function security.tick()
 				return on_conflict_detected("Clone mismatch: " .. label)
 			end
 		end
-		probe_clone_mismatch(coroutine.wrap, security.pristine_refs.wrap, "coroutine.wrap")
-		probe_clone_mismatch(isfunctionhooked, security.pristine_refs.isfunctionhooked, "isfunctionhooked")
-		probe_clone_mismatch(loadstring, security.pristine_refs.loadstring, "loadstring")
 	end
 
 	-- start checking lua functions...
