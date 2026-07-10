@@ -13,6 +13,14 @@ if type(LRM_SANITIZE) ~= "function" then
 	end
 end
 
+-- kill previous security instance on re-execute
+pcall(function()
+	if getgenv and getgenv()._ZH_SECURITY_REF then
+		getgenv()._ZH_SECURITY_REF._stopped = true
+	end
+end)
+
+
 local security = {
 	first_send = false,
 	current_tick = 0,
@@ -1943,6 +1951,7 @@ do
 	end
 end
 
+getgenv()._ZH_SECURITY_REF = security
 -- return security...
 return security
 
