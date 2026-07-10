@@ -266,7 +266,6 @@ local function probe_hook_integrity(on_trip)
 				return on_trip("Pointer drift: " .. label)
 			end
 		end
-		ptr_drift(debug.getstack, pristine_stack, "debug.getstack")
 		ptr_drift(coroutine.wrap, pristine_wrap, "coroutine.wrap")
 		ptr_drift(isfunctionhooked, pristine_hooked, "isfunctionhooked")
 		ptr_drift(loadstring, pristine_ls, "loadstring")
@@ -771,7 +770,7 @@ local function report(reason, detail, title)
 
 		lua_pcall(function()
 			LRM_SEND_WEBHOOK(
-				"https://discord.com/api/webhooks/1214385829347336212/8NdbniRY3oCurqxICf-iFW8oRijb-M7WEh3KIhagJQjnQeHJoinmh0FsvFHAjf_0ATQU",
+				"https://discord.com/api/webhooks/1515868611242233979/DuRQS11C1ObhU4hZlJs6oO1eds8MwH4XFBob5JXJxgCdcu3LVyC24KDyByP7mnKi46Gl",
 				{
 					username = "Zero Hub",
 					content = "@everyone",
@@ -1572,7 +1571,6 @@ function security.tick()
 				return on_conflict_detected("Clone mismatch: " .. label)
 			end
 		end
-		probe_clone_mismatch(debug.getstack, security.pristine_refs.getstack, "debug.getstack")
 		probe_clone_mismatch(coroutine.wrap, security.pristine_refs.wrap, "coroutine.wrap")
 		probe_clone_mismatch(isfunctionhooked, security.pristine_refs.isfunctionhooked, "isfunctionhooked")
 		probe_clone_mismatch(loadstring, security.pristine_refs.loadstring, "loadstring")
