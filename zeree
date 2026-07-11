@@ -1883,7 +1883,7 @@ function MacLib:Window(Settings)
 	end
 
 	local function UpdateOrientation(fetchProps)
-		if not IsVisible(frame) or not acrylicBlur or unloaded then
+		if not acrylicBlur or unloaded or not IsVisible(frame) then
 			for _, pt in pairs(parts) do
 				pt.Parent = nil
 			end
@@ -1936,9 +1936,10 @@ function MacLib:Window(Settings)
 		end
 	end
 
-	UpdateOrientation(true)
-
-	RunService.RenderStepped:Connect(UpdateOrientation)
+	if acrylicBlur then
+		UpdateOrientation(true)
+		RunService.RenderStepped:Connect(UpdateOrientation)
+	end
 
 	function WindowFunctions:GlobalSetting(Settings)
 		hasGlobalSetting = true
